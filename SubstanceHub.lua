@@ -226,49 +226,87 @@ local lastVoidSave = 0
 local flyBg = nil
 local flyBv = nil
 
+-- shared movement state for all modules
+_G.SubstanceCharMods = charMods
+
+local isApplyingMovement = false
 local function applySpeedAndJump()
+	if isApplyingMovement then return end
+	if not (charMods.speedEnabled or charMods.jumpEnabled) then return end
+	isApplyingMovement = true
 	pcall(function()
-		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-			local hum = lp.Character.Humanoid
-			local targetSpeed = charMods.speedEnabled and charMods.speed or 16
-			local targetJump = charMods.jumpEnabled and charMods.jump or 50
-			if hum.WalkSpeed ~= targetSpeed then
-				hum.WalkSpeed = targetSpeed
+		local ch = lp.Character
+		if ch then
+			local hum = ch:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				if charMods.speedEnabled then
+					if math.abs(hum.WalkSpeed - charMods.speed) > 0.05 then
+						hum.WalkSpeed = charMods.speed
+					end
+				end
+				if charMods.jumpEnabled then
+					if not hum.UseJumpPower then
+						hum.UseJumpPower = true
+					end
+					if math.abs(hum.JumpPower - charMods.jump) > 0.05 then
+						hum.JumpPower = charMods.jump
+					end
+					local targetHeight = (charMods.jump / 50) * 7.2
+					if math.abs(hum.JumpHeight - targetHeight) > 0.1 then
+						hum.JumpHeight = targetHeight
+					end
+				end
 			end
-			if hum.JumpPower ~= targetJump then
-				hum.JumpPower = targetJump
+		end
+	end)
+	isApplyingMovement = false
+end
+
+local function restoreDefaultMovement()
+	pcall(function()
+		local ch = lp.Character
+		if ch then
+			local hum = ch:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				if not charMods.speedEnabled and math.abs(hum.WalkSpeed - 16) > 0.05 then
+					hum.WalkSpeed = 16
+				end
+				if not charMods.jumpEnabled then
+					hum.JumpPower = 50
+					hum.JumpHeight = 7.2
+				end
 			end
 		end
 	end)
 end
 
+_G.SubstanceApplySpeed = applySpeedAndJump
+_G.SubstanceRestoreMovement = restoreDefaultMovement
+
 local function hookCharacter(ch)
-	local hum = ch:WaitForChild("Humanoid", 5)
-	if hum then
-		hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-			local targetSpeed = charMods.speedEnabled and charMods.speed or 16
-			if hum.WalkSpeed ~= targetSpeed then
-				hum.WalkSpeed = targetSpeed
-			end
-		end)
-		hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
-			local targetJump = charMods.jumpEnabled and charMods.jump or 50
-			if hum.JumpPower ~= targetJump then
-				hum.JumpPower = targetJump
-			end
-		end)
-	end
-	applySpeedAndJump()
+	task.defer(function()
+		if charMods.speedEnabled or charMods.jumpEnabled then
+			applySpeedAndJump()
+		end
+	end)
 end
 
 if lp.Character then hookCharacter(lp.Character) end
-lp.CharacterAdded:Connect(function(ch)
-	hookCharacter(ch)
-end)
-rs.Heartbeat:Connect(applySpeedAndJump)
+lp.CharacterAdded:Connect(hookCharacter)
 
--- ground tracking for anti-void (records any solid ground position)
+-- Single throttled heartbeat update: only executes when speed/jump are active, completely eliminating re-entrancy
 rs.Heartbeat:Connect(function()
+	if charMods.speedEnabled or charMods.jumpEnabled then
+		applySpeedAndJump()
+	end
+end)
+
+-- ground tracking for anti-void throttled to every 0.1s
+local lastGroundCheck = 0
+rs.Heartbeat:Connect(function()
+	local now = tick()
+	if now - lastGroundCheck < 0.1 then return end
+	lastGroundCheck = now
 	pcall(function()
 		if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") and lp.Character:FindFirstChild("Humanoid") then
 			local hum = lp.Character.Humanoid
@@ -584,7 +622,11 @@ local speedToggle = playerTab:AddToggle("EnableSpeed", {
 	Default = false,
 	Callback = function(v)
 		charMods.speedEnabled = v
-		applySpeedAndJump()
+		if v then
+			applySpeedAndJump()
+		else
+			restoreDefaultMovement()
+		end
 	end,
 })
 
@@ -596,7 +638,9 @@ playerTab:AddSlider("WalkSpeed", {
 	Rounding = 1,
 	Callback = function(v)
 		charMods.speed = v
-		applySpeedAndJump()
+		if charMods.speedEnabled then
+			applySpeedAndJump()
+		end
 	end,
 })
 
@@ -605,7 +649,11 @@ local jumpToggle = playerTab:AddToggle("EnableJump", {
 	Default = false,
 	Callback = function(v)
 		charMods.jumpEnabled = v
-		applySpeedAndJump()
+		if v then
+			applySpeedAndJump()
+		else
+			restoreDefaultMovement()
+		end
 	end,
 })
 
@@ -617,7 +665,9 @@ playerTab:AddSlider("JumpPower", {
 	Rounding = 1,
 	Callback = function(v)
 		charMods.jump = v
-		applySpeedAndJump()
+		if charMods.jumpEnabled then
+			applySpeedAndJump()
+		end
 	end,
 })
 

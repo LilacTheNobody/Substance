@@ -450,19 +450,45 @@ local function shootMurderer()
 	return shootAt(targetPos)
 end
 
--- kill all (stabs every alive player when you are murderer)
+-- kill all (brings alive targets directly in front of knife without teleporting local player)
 local isKillingAll = false
+
+local function isAliveTarget(p)
+	if not p or not p.Parent or p == lp then return false end
+	local ch = p.Character
+	if not ch or not ch.Parent then return false end
+	local hum = ch:FindFirstChildOfClass("Humanoid")
+	local hrp = ch:FindFirstChild("HumanoidRootPart")
+	local head = ch:FindFirstChild("Head")
+	if not hum or not hrp or not head then return false end
+	if hum.Health <= 0 then return false end
+	if hum:GetState() == Enum.HumanoidStateType.Dead then return false end
+	if ch:FindFirstChild("Dead") then return false end
+	if ch:FindFirstChildOfClass("ForceField") then return false end
+	if ch:FindFirstChild("Ragdoll") or ch:FindFirstChild("Ragdolled") then return false end
+	return true
+end
 
 local function killAll()
 	if isKillingAll then return end
 	local ch = lp.Character
 	if not ch then return end
-	local hum = ch:FindFirstChild("Humanoid")
+	local hum = ch:FindFirstChildOfClass("Humanoid")
 	local hrp = ch:FindFirstChild("HumanoidRootPart")
-	if not hum or not hrp then return end
+	if not hum or not hrp or hum.Health <= 0 then return end
 
 	local knife = ch:FindFirstChild("Knife") or (lp.Backpack and lp.Backpack:FindFirstChild("Knife"))
 	if not knife then return end
+
+	-- filter all valid alive players first
+	local targets = {}
+	for _, p in ipairs(plrs:GetPlayers()) do
+		if isAliveTarget(p) then
+			table.insert(targets, p)
+		end
+	end
+
+	if #targets == 0 then return end
 
 	isKillingAll = true
 
@@ -471,42 +497,64 @@ local function killAll()
 		task.wait(0.1)
 	end
 
-	local origPos = hrp.CFrame
+	local knifeHandle = knife:FindFirstChild("Handle")
 
-	for _, p in ipairs(plrs:GetPlayers()) do
-		if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-			local tHum = p.Character:FindFirstChild("Humanoid")
-			if tHum and tHum.Health > 0 then
-				hrp.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 1.2)
-				task.wait(0.06)
-				pcall(function()
-					knife:Activate()
-				end)
-				task.wait(0.06)
-			end
+	for _, p in ipairs(targets) do
+		if not isAliveTarget(p) then
+			continue
+		end
+
+		local tch = p.Character
+		local thrp = tch and tch:FindFirstChild("HumanoidRootPart")
+		if thrp and hrp and hrp.Parent then
+			-- Bring target directly in front of the local player (local player never teleports away)
+			local strikeCf = hrp.CFrame * CFrame.new(0, 0, -2.4)
+			pcall(function()
+				thrp.CFrame = strikeCf
+				thrp.AssemblyLinearVelocity = Vector3.zero
+				thrp.AssemblyAngularVelocity = Vector3.zero
+				if tch:FindFirstChild("UpperTorso") then
+					tch.UpperTorso.CFrame = strikeCf
+				elseif tch:FindFirstChild("Torso") then
+					tch.Torso.CFrame = strikeCf
+				end
+			end)
+
+			-- Slash knife
+			pcall(function()
+				knife:Activate()
+				if knifeHandle and typeof(firetouchinterest) == "function" then
+					firetouchinterest(thrp, knifeHandle, 0)
+					firetouchinterest(thrp, knifeHandle, 1)
+				end
+			end)
+
+			task.wait(0.08)
 		end
 	end
 
-	for _ = 1, 6 do
-		hrp.AssemblyLinearVelocity = Vector3.zero
-		hrp.AssemblyAngularVelocity = Vector3.zero
-		hrp.CFrame = origPos
-		task.wait(0.03)
-	end
 	isKillingAll = false
 end
 
--- bring gun to player
-local function bringGun()
+-- bring gun helper with fast container lookup
+local function findGunDrop()
 	local gd = workspace:FindFirstChild("GunDrop")
-	if not gd then
-		for _, v in ipairs(workspace:GetDescendants()) do
-			if v.Name == "GunDrop" and (v:IsA("BasePart") or v:IsA("Model")) then
-				gd = v
-				break
-			end
+	if gd then return gd end
+	local normal = workspace:FindFirstChild("Normal")
+	if normal then
+		gd = normal:FindFirstChild("GunDrop")
+		if gd then return gd end
+	end
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if v.Name == "GunDrop" and (v:IsA("BasePart") or v:IsA("Model")) then
+			return v
 		end
 	end
+	return nil
+end
+
+local function bringGun()
+	local gd = findGunDrop()
 	if not gd then
 		return false, "Gun is not dropped on the map"
 	end
@@ -542,11 +590,33 @@ local function bringGun()
 	return true, "Gun collected!"
 end
 
--- coin grabber (brings all coins in workspace directly to player)
+-- optimized coin grabber (checks CoinContainer first before heavy scans)
 local function grabCoins()
 	local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return 0 end
 	local count = 0
+
+	local container = nil
+	local normal = workspace:FindFirstChild("Normal")
+	if normal then
+		container = normal:FindFirstChild("CoinContainer")
+	end
+	if not container then
+		container = workspace:FindFirstChild("CoinContainer")
+	end
+
+	if container then
+		for _, obj in ipairs(container:GetChildren()) do
+			if obj:IsA("BasePart") then
+				pcall(function()
+					obj.CFrame = hrp.CFrame
+					count = count + 1
+				end)
+			end
+		end
+		return count
+	end
+
 	for _, obj in ipairs(workspace:GetDescendants()) do
 		if obj:IsA("BasePart") and (obj.Name == "Coin" or obj.Name == "Coin_Server" or obj.Name:find("Coin") ~= nil) then
 			pcall(function()
@@ -653,40 +723,114 @@ local function flingMurderer()
 	return true, "Murderer flung!"
 end
 
--- persistent speed & jump (prevents knife equip/slash from resetting speed)
+-- persistent speed & jump sync with hub or standalone fallback
+local isApplyingLocal = false
 local function applyLocalSpeed()
+	if _G.SubstanceCharMods then
+		_G.SubstanceCharMods.speedEnabled = cfg.speedEnabled
+		_G.SubstanceCharMods.speed = cfg.speed
+		_G.SubstanceCharMods.jumpEnabled = cfg.jumpEnabled
+		_G.SubstanceCharMods.jump = cfg.jumpPow
+		if _G.SubstanceApplySpeed then
+			_G.SubstanceApplySpeed()
+		end
+		return
+	end
+
+	if isApplyingLocal then return end
+	if not (cfg.speedEnabled or cfg.jumpEnabled) then return end
+	isApplyingLocal = true
 	pcall(function()
-		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-			local hum = lp.Character.Humanoid
-			local targetSpeed = cfg.speedEnabled and cfg.speed or 16
-			local targetJump = cfg.jumpEnabled and cfg.jumpPow or 50
-			if hum.WalkSpeed ~= targetSpeed then
-				hum.WalkSpeed = targetSpeed
+		local ch = lp.Character
+		if ch then
+			local hum = ch:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				if cfg.speedEnabled and math.abs(hum.WalkSpeed - cfg.speed) > 0.05 then
+					hum.WalkSpeed = cfg.speed
+				end
+				if cfg.jumpEnabled then
+					if not hum.UseJumpPower then
+						hum.UseJumpPower = true
+					end
+					if math.abs(hum.JumpPower - cfg.jumpPow) > 0.05 then
+						hum.JumpPower = cfg.jumpPow
+					end
+					local targetHeight = (cfg.jumpPow / 50) * 7.2
+					if math.abs(hum.JumpHeight - targetHeight) > 0.1 then
+						hum.JumpHeight = targetHeight
+					end
+				end
 			end
-			if hum.JumpPower ~= targetJump then
-				hum.JumpPower = targetJump
+		end
+	end)
+	isApplyingLocal = false
+end
+
+local function restoreLocalDefaultMovement()
+	if _G.SubstanceRestoreMovement then
+		if _G.SubstanceCharMods then
+			_G.SubstanceCharMods.speedEnabled = cfg.speedEnabled
+			_G.SubstanceCharMods.jumpEnabled = cfg.jumpEnabled
+		end
+		_G.SubstanceRestoreMovement()
+		return
+	end
+	pcall(function()
+		local ch = lp.Character
+		if ch then
+			local hum = ch:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				if not cfg.speedEnabled and math.abs(hum.WalkSpeed - 16) > 0.05 then
+					hum.WalkSpeed = 16
+				end
+				if not cfg.jumpEnabled then
+					hum.JumpPower = 50
+					hum.JumpHeight = 7.2
+				end
 			end
 		end
 	end)
 end
 
 local function hookLocalHumanoid(ch)
-	local hum = ch:WaitForChild("Humanoid", 5)
-	if hum then
-		hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-			local targetSpeed = cfg.speedEnabled and cfg.speed or 16
-			if hum.WalkSpeed ~= targetSpeed then
-				hum.WalkSpeed = targetSpeed
-			end
-		end)
-		hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
-			local targetJump = cfg.jumpEnabled and cfg.jumpPow or 50
-			if hum.JumpPower ~= targetJump then
-				hum.JumpPower = targetJump
-			end
-		end)
+	task.defer(function()
+		if cfg.speedEnabled or cfg.jumpEnabled then
+			applyLocalSpeed()
+		end
+	end)
+end
+
+-- fullbright helper
+local function setFullbright(v)
+	cfg.fullbright = v
+	local lighting = game:GetService("Lighting")
+	pcall(function()
+		if v then
+			lighting.Ambient = Color3.fromRGB(255, 255, 255)
+			lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+			lighting.Brightness = 2
+			lighting.ClockTime = 14
+			lighting.FogEnd = 1e5
+		else
+			lighting.Ambient = Color3.fromRGB(128, 128, 128)
+			lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+			lighting.Brightness = 1
+			lighting.ClockTime = 14
+			lighting.FogEnd = 10000
+		end
+	end)
+end
+
+-- spectate helper
+local function spectateTarget(p)
+	if p and p.Character and p.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = p.Character.Humanoid
+		return true
 	end
-	applyLocalSpeed()
+	if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = lp.Character.Humanoid
+	end
+	return false
 end
 
 -- warning & announcer helpers
