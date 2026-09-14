@@ -439,17 +439,6 @@ local function shootAt(pos)
 	return false
 end
 
-local function shootMurderer()
-	local m = getMurderer()
-	if not m or not m.Character then return false end
-	local hrp = m.Character:FindFirstChild("HumanoidRootPart")
-	local hum = m.Character:FindFirstChild("Humanoid")
-	if not hrp or not hum then return false end
-
-	local targetPos = hrp.Position + (hum.MoveDirection * cfg.shootOffset)
-	return shootAt(targetPos)
-end
-
 -- check if a player is in the lobby (waiting / eliminated / not on active map)
 local function isPlayerInLobby(p)
 	local ch = p.Character
@@ -476,7 +465,7 @@ local function isPlayerInLobby(p)
 		end
 	end
 
-	-- 2. Check distance relative to local player (Murderer is inside the map)
+	-- 2. Check distance relative to local player (Murderer/Sheriff is inside the map)
 	local myHrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 	if myHrp then
 		local dist = (hrp.Position - myHrp.Position).Magnitude
@@ -500,6 +489,63 @@ local function isPlayerInLobby(p)
 	end
 
 	return false
+end
+
+-- shoots murderer by bringing them directly in front of you and firing revolver
+local function shootMurderer()
+	local m = getMurderer()
+	if not m or not m.Character then return false end
+	local ch = lp.Character
+	if not ch then return false end
+	local hrp = ch:FindFirstChild("HumanoidRootPart")
+	local hum = ch:FindFirstChildOfClass("Humanoid")
+	if not hrp or not hum or hum.Health <= 0 then return false end
+
+	-- Exclude murderer if in lobby or dead
+	if isPlayerInLobby(m) then return false end
+	local mHrp = m.Character:FindFirstChild("HumanoidRootPart")
+	local mHum = m.Character:FindFirstChildOfClass("Humanoid")
+	if not mHrp or not mHum or mHum.Health <= 0 then return false end
+
+	-- Equip Gun if in backpack
+	local gun = ch:FindFirstChild("Gun") or ch:FindFirstChild("Revolver")
+	if not gun then
+		local bp = lp:FindFirstChild("Backpack")
+		if bp then
+			local bg = bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")
+			if bg then
+				hum:EquipTool(bg)
+				task.wait(0.08)
+				gun = ch:FindFirstChild("Gun") or ch:FindFirstChild("Revolver")
+			end
+		end
+	end
+	if not gun then return false end
+
+	-- Bring Murderer directly in front of the local player (aim line)
+	local targetSpot = hrp.CFrame * CFrame.new(0, 0, -3.2)
+	pcall(function()
+		mHrp.CFrame = targetSpot
+		mHrp.AssemblyLinearVelocity = Vector3.zero
+		mHrp.AssemblyAngularVelocity = Vector3.zero
+		if m.Character:FindFirstChild("UpperTorso") then
+			m.Character.UpperTorso.CFrame = targetSpot
+		elseif m.Character:FindFirstChild("Torso") then
+			m.Character.Torso.CFrame = targetSpot
+		end
+		if m.Character:FindFirstChild("Head") then
+			m.Character.Head.CFrame = targetSpot + Vector3.new(0, 1.4, 0)
+		end
+	end)
+
+	task.wait(0.05)
+
+	local aimPos = mHrp.Position
+	if m.Character:FindFirstChild("Head") then
+		aimPos = m.Character.Head.Position
+	end
+
+	return shootAt(aimPos)
 end
 
 local function isAliveTarget(p)
@@ -1403,6 +1449,7 @@ end
 
 -- bulletproof background loop (never dies across rounds)
 local lastAutoKill = 0
+local lastAutoShoot = 0
 
 module.BackgroundTask = function(api)
 	cachedApi = api
@@ -1431,14 +1478,19 @@ module.BackgroundTask = function(api)
 			checkMurdererWarning()
 			checkRoleAnnounce()
 
-			-- auto shoot murderer
-			if cfg.autoShoot then
+			-- auto shoot murderer (teleports murderer directly to you and shoots)
+			if cfg.autoShoot and (tick() - lastAutoShoot > 1.1) then
 				pcall(function()
-					local m = getMurderer()
-					if m and m.Character and m.Character:FindFirstChild("HumanoidRootPart") then
-						local hasGun = lp.Backpack:FindFirstChild("Gun") or lp.Backpack:FindFirstChild("Revolver") or (lp.Character and (lp.Character:FindFirstChild("Gun") or lp.Character:FindFirstChild("Revolver")))
-						if hasGun then
-							shootMurderer()
+					local hasGun = (lp.Character and (lp.Character:FindFirstChild("Gun") or lp.Character:FindFirstChild("Revolver")))
+						or (lp.Backpack and (lp.Backpack:FindFirstChild("Gun") or lp.Backpack:FindFirstChild("Revolver")))
+					if hasGun then
+						local m = getMurderer()
+						if m and m.Character and not isPlayerInLobby(m) then
+							local mHum = m.Character:FindFirstChildOfClass("Humanoid")
+							if mHum and mHum.Health > 0 then
+								lastAutoShoot = tick()
+								task.spawn(shootMurderer)
+							end
 						end
 					end
 				end)
