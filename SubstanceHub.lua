@@ -38,21 +38,18 @@ local function fetchScript(url, fallbackFile)
 	return nil
 end
 
--- load fluent ui
-local Fluent = fetchScript(
-	"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua",
-	"SubstanceUI.lua"
-)
-
-if not Fluent then
-	Fluent = fetchScript(
+local function loadFluent()
+	local lib = fetchScript(
 		"https://raw.githubusercontent.com/LilacTheNobody/Substance/main/SubstanceUI.lua",
 		"SubstanceUI.lua"
 	)
-end
-
-if not Fluent then
-	error("[Substance] Failed to load Fluent UI library")
+	if not lib then
+		lib = fetchScript(
+			"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua",
+			"SubstanceUI.lua"
+		)
+	end
+	return lib
 end
 
 -- load module system
@@ -66,7 +63,12 @@ local VALID_KEY = "releasehellyeah"
 local DISCORD_INVITE = "https://discord.gg/substance"
 
 if not _G.SubstanceKeyValid then
-	local KeyWindow = Fluent:CreateWindow({
+	local KeyFluent = loadFluent()
+	if not KeyFluent then
+		error("[Substance] Failed to load Fluent UI library for key system")
+	end
+
+	local KeyWindow = KeyFluent:CreateWindow({
 		Title = "Substance",
 		SubTitle = "Key System",
 		TabWidth = 140,
@@ -104,15 +106,15 @@ if not _G.SubstanceKeyValid then
 			if clean == VALID_KEY then
 				_G.SubstanceKeyValid = true
 				keyVerified = true
-				Fluent:Notify({
+				KeyFluent:Notify({
 					Title = "Key Accepted",
 					Content = "Loading Substance Hub...",
 					Duration = 2,
 				})
 				task.wait(0.4)
-				KeyWindow:Destroy()
+				KeyFluent:Destroy()
 			else
-				Fluent:Notify({
+				KeyFluent:Notify({
 					Title = "Invalid Key",
 					Content = "Incorrect key. Check our Discord for the key.",
 					Duration = 3,
@@ -128,7 +130,7 @@ if not _G.SubstanceKeyValid then
 			pcall(function()
 				setclipboard(DISCORD_INVITE)
 			end)
-			Fluent:Notify({
+			KeyFluent:Notify({
 				Title = "Discord Invite Copied",
 				Content = "Copied " .. DISCORD_INVITE .. " to clipboard!",
 				Duration = 4,
@@ -136,7 +138,16 @@ if not _G.SubstanceKeyValid then
 		end,
 	})
 
+	-- Select the tab so the Access tab is active immediately upon opening
+	KeyWindow:SelectTab(1)
+
 	repeat task.wait(0.1) until keyVerified
+end
+
+-- now load fresh fluent instance for the main hub
+local Fluent = loadFluent()
+if not Fluent then
+	error("[Substance] Failed to load Fluent UI library for main hub")
 end
 
 -- game detection
@@ -571,4 +582,5 @@ settingsTab:AddButton({
 	end,
 })
 
+-- Open Home tab by default upon window creation
 Window:SelectTab(1)
