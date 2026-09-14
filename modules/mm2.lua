@@ -10,6 +10,14 @@ local ts = game:GetService("TweenService")
 local vu = game:GetService("VirtualUser")
 local lp = plrs.LocalPlayer
 
+-- notification helper
+local cachedApi = nil
+local function apiNotify(cfg)
+	if cachedApi and cachedApi.Notify then
+		pcall(cachedApi.Notify, cfg)
+	end
+end
+
 -- settings
 local cfg = {
 	esp = false,
@@ -35,7 +43,9 @@ local cfg = {
 	antiAfk = true,
 
 	-- movement
+	speedEnabled = false,
 	speed = 16,
+	jumpEnabled = false,
 	jumpPow = 50,
 }
 
@@ -53,18 +63,27 @@ local gunHL = nil
 local gunBB = nil
 local conns = {}
 
--- weapon check helper
+-- weapon check helper (gun checked first to prevent misdetection from KnifeServer script)
 local function checkItem(item, kind)
 	if not item then return false end
 	local n = item.Name:lower()
-	if kind == "knife" then
-		if n == "knife" or n:find("knife") ~= nil then return true end
-		if item:FindFirstChild("KnifeScript") or item:FindFirstChild("ThrowKnife") then return true end
-		if item:FindFirstChild("KnifeServer") then return true end
-	elseif kind == "gun" then
-		if n == "gun" or n == "revolver" or n:find("gun") ~= nil or n:find("revolver") ~= nil then return true end
-		if item:FindFirstChild("GunScript") or item:FindFirstChild("ShootGun") then return true end
-		if item:FindFirstChild("KnifeServer") and item:FindFirstChild("ShootGun") then return true end
+
+	local isGun = (n == "gun" or n == "revolver" or n:find("gun") ~= nil or n:find("revolver") ~= nil
+		or item:FindFirstChild("GunScript") ~= nil
+		or item:FindFirstChild("ShootGun") ~= nil
+		or item:FindFirstChild("Shoot") ~= nil
+		or item:FindFirstChild("GunLevel") ~= nil)
+
+	local isKnife = (n == "knife" or n:find("knife") ~= nil
+		or item:FindFirstChild("ThrowKnife") ~= nil
+		or item:FindFirstChild("KnifeScript") ~= nil
+		or item:FindFirstChild("Slash") ~= nil
+		or (item:FindFirstChild("KnifeServer") ~= nil and not isGun))
+
+	if kind == "gun" then
+		return isGun
+	elseif kind == "knife" then
+		return isKnife and not isGun
 	end
 	return false
 end
@@ -72,21 +91,21 @@ end
 local function scanPlayer(p)
 	if not p or not p.Parent then return nil end
 
-	-- check character first (both Tools and holstered Models/Accessories)
+	-- check character first (check gun first!)
 	local ch = p.Character
 	if ch then
 		for _, item in ipairs(ch:GetChildren()) do
-			if checkItem(item, "knife") then return "Murderer" end
 			if checkItem(item, "gun") then return "Sheriff" end
+			if checkItem(item, "knife") then return "Murderer" end
 		end
 	end
 
-	-- check backpack
+	-- check backpack (check gun first!)
 	local bp = p:FindFirstChild("Backpack")
 	if bp then
 		for _, item in ipairs(bp:GetChildren()) do
-			if checkItem(item, "knife") then return "Murderer" end
 			if checkItem(item, "gun") then return "Sheriff" end
+			if checkItem(item, "knife") then return "Murderer" end
 		end
 	end
 
@@ -106,7 +125,7 @@ local function getRole(p)
 		return found
 	end
 
-	-- if sheriff died and gun is on the ground, don't keep dead sheriff cached
+	-- if sheriff died and gun is on the ground, reset sheriff cache for dead player
 	if cachedRoles[p] == "Sheriff" then
 		local ch = p.Character
 		local hum = ch and ch:FindFirstChild("Humanoid")
@@ -438,16 +457,139 @@ local function killAll()
 	isKillingAll = false
 end
 
+-- bring gun to player
+local function bringGun()
+	local gd = workspace:FindFirstChild("GunDrop")
+	if not gd then
+		for _, v in ipairs(workspace:GetDescendants()) do
+			if v.Name == "GunDrop" and (v:IsA("BasePart") or v:IsA("Model")) then
+				gd = v
+				break
+			end
+		end
+	end
+	if not gd then
+		return false, "Gun is not dropped on the map"
+	end
+
+	local ch = lp.Character
+	if not ch or not ch:FindFirstChild("HumanoidRootPart") then return false, "Character not ready" end
+	local hrp = ch.HumanoidRootPart
+	local origCf = hrp.CFrame
+
+	-- Method 1: Bring GunDrop part directly to player RootPart
+	pcall(function()
+		if gd:IsA("BasePart") then
+			gd.CFrame = hrp.CFrame
+		elseif gd:IsA("Model") then
+			gd:PivotTo(hrp.CFrame)
+		end
+	end)
+
+	task.wait(0.12)
+	local hasGun = lp.Backpack:FindFirstChild("Gun") or lp.Backpack:FindFirstChild("Revolver") or (ch and (ch:FindFirstChild("Gun") or ch:FindFirstChild("Revolver")))
+	if not hasGun then
+		-- Method 2: Fast touch teleport with safe return
+		local gunPos = gd:GetPivot().Position
+		hrp.CFrame = CFrame.new(gunPos + Vector3.new(0, 1.5, 0))
+		task.wait(0.2)
+		for _ = 1, 5 do
+			hrp.AssemblyLinearVelocity = Vector3.zero
+			hrp.AssemblyAngularVelocity = Vector3.zero
+			hrp.CFrame = origCf
+			task.wait(0.02)
+		end
+	end
+	return true, "Gun collected!"
+end
+
+-- coin grabber (brings all coins in workspace directly to player)
+local function grabCoins()
+	local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return 0 end
+	local count = 0
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and (obj.Name == "Coin" or obj.Name == "Coin_Server" or obj.Name:find("Coin") ~= nil) then
+			pcall(function()
+				obj.CFrame = hrp.CFrame
+				count = count + 1
+			end)
+		end
+	end
+	return count
+end
+
+-- humanoid duplication godmode
+local function enableGodmode()
+	local ch = lp.Character
+	if not ch then return false, "Character not found" end
+	local hum = ch:FindFirstChild("Humanoid")
+	if not hum then return false, "Humanoid not found" end
+
+	pcall(function()
+		hum.Name = "1"
+		local clone = ch["1"]:Clone()
+		clone.Parent = ch
+		clone.Name = "Humanoid"
+		task.wait(0.1)
+		ch["1"]:Destroy()
+		workspace.CurrentCamera.CameraSubject = clone
+		if ch:FindFirstChild("Animate") then
+			ch.Animate.Disabled = true
+			task.wait(0.1)
+			ch.Animate.Disabled = false
+		end
+	end)
+	return true, "God Mode active! (Do not reset character)"
+end
+
+-- fling murderer
+local function flingMurderer()
+	local m = getMurderer()
+	if not m or not m.Character then return false, "Murderer not found or dead" end
+	local ch = lp.Character
+	local tch = m.Character
+	if not ch or not tch then return false, "Character not ready" end
+	local hrp = ch:FindFirstChild("HumanoidRootPart")
+	local thrp = tch:FindFirstChild("HumanoidRootPart")
+	if not hrp or not thrp then return false, "RootPart not ready" end
+
+	local savedPos = hrp.CFrame
+
+	local bav = Instance.new("BodyAngularVelocity")
+	bav.AngularVelocity = Vector3.new(99999, 99999, 99999)
+	bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+	bav.P = math.huge
+	bav.Parent = hrp
+
+	local t0 = tick()
+	while tick() - t0 < 1.4 and thrp.Parent do
+		hrp.CFrame = thrp.CFrame
+		task.wait()
+	end
+	bav:Destroy()
+
+	for _ = 1, 8 do
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+		hrp.CFrame = savedPos
+		task.wait(0.03)
+	end
+	return true, "Murderer flung!"
+end
+
 -- persistent speed & jump (prevents knife equip/slash from resetting speed)
 local function applyLocalSpeed()
 	pcall(function()
 		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
 			local hum = lp.Character.Humanoid
-			if cfg.speed ~= 16 and hum.WalkSpeed ~= cfg.speed then
-				hum.WalkSpeed = cfg.speed
+			local targetSpeed = cfg.speedEnabled and cfg.speed or 16
+			local targetJump = cfg.jumpEnabled and cfg.jumpPow or 50
+			if hum.WalkSpeed ~= targetSpeed then
+				hum.WalkSpeed = targetSpeed
 			end
-			if cfg.jumpPow ~= 50 and hum.JumpPower ~= cfg.jumpPow then
-				hum.JumpPower = cfg.jumpPow
+			if hum.JumpPower ~= targetJump then
+				hum.JumpPower = targetJump
 			end
 		end
 	end)
@@ -457,13 +599,15 @@ local function hookLocalHumanoid(ch)
 	local hum = ch:WaitForChild("Humanoid", 5)
 	if hum then
 		hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-			if cfg.speed ~= 16 and hum.WalkSpeed ~= cfg.speed then
-				hum.WalkSpeed = cfg.speed
+			local targetSpeed = cfg.speedEnabled and cfg.speed or 16
+			if hum.WalkSpeed ~= targetSpeed then
+				hum.WalkSpeed = targetSpeed
 			end
 		end)
 		hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
-			if cfg.jumpPow ~= 50 and hum.JumpPower ~= cfg.jumpPow then
-				hum.JumpPower = cfg.jumpPow
+			local targetJump = cfg.jumpEnabled and cfg.jumpPow or 50
+			if hum.JumpPower ~= targetJump then
+				hum.JumpPower = targetJump
 			end
 		end)
 	end
@@ -475,7 +619,7 @@ module.Name = "MM2"
 module.GameId = 142823291
 module.GameName = "Murder Mystery 2"
 module.Author = "Substance"
-module.Version = "2.2"
+module.Version = "2.3"
 module.Icon = "crosshair"
 
 -- ui elements
@@ -485,6 +629,7 @@ module.Elements = {
 	{
 		Type = "Toggle",
 		Name = "Enable ESP",
+		Description = "Master toggle for all ESP overlays",
 		Default = false,
 		Callback = function(v)
 			cfg.esp = v
@@ -495,29 +640,44 @@ module.Elements = {
 	},
 
 	{
-		Type = "Dropdown",
-		Name = "ESP Roles",
-		Multi = true,
-		Values = { "Murderer", "Sheriff", "Innocent" },
-		Default = { "Murderer", "Sheriff" },
+		Type = "Toggle",
+		Name = "Murderer ESP",
+		Description = "Highlights the Murderer in crimson red",
+		Default = true,
 		Callback = function(v)
-			cfg.roles = {
-				Murderer = false,
-				Sheriff = false,
-				Innocent = false,
-			}
-			if type(v) == "table" then
-				for k, val in pairs(v) do
-					if type(k) == "string" and val == true then
-						cfg.roles[k] = true
-					elseif type(val) == "string" then
-						cfg.roles[val] = true
-					end
+			cfg.roles.Murderer = v
+			for p in pairs(highlights) do
+				if getRole(p) == "Murderer" and not v then
+					clearPlayerESP(p)
 				end
 			end
+		end,
+	},
+
+	{
+		Type = "Toggle",
+		Name = "Sheriff ESP",
+		Description = "Highlights the Sheriff or Hero in vibrant blue",
+		Default = true,
+		Callback = function(v)
+			cfg.roles.Sheriff = v
 			for p in pairs(highlights) do
-				local r = getRole(p)
-				if not cfg.roles[r] then
+				if getRole(p) == "Sheriff" and not v then
+					clearPlayerESP(p)
+				end
+			end
+		end,
+	},
+
+	{
+		Type = "Toggle",
+		Name = "Innocent ESP",
+		Description = "Highlights all Innocent players in green",
+		Default = false,
+		Callback = function(v)
+			cfg.roles.Innocent = v
+			for p in pairs(highlights) do
+				if getRole(p) == "Innocent" and not v then
 					clearPlayerESP(p)
 				end
 			end
@@ -527,6 +687,7 @@ module.Elements = {
 	{
 		Type = "Toggle",
 		Name = "Dropped Gun ESP",
+		Description = "Highlights dropped sheriff gun in gold with distance",
 		Default = true,
 		Callback = function(v)
 			cfg.gunEsp = v
@@ -537,6 +698,7 @@ module.Elements = {
 	{
 		Type = "Toggle",
 		Name = "Show Names",
+		Description = "Displays player display names above heads",
 		Default = true,
 		Callback = function(v)
 			cfg.showNames = v
@@ -546,6 +708,7 @@ module.Elements = {
 	{
 		Type = "Toggle",
 		Name = "Show Distance",
+		Description = "Displays distance in meters on player tags",
 		Default = true,
 		Callback = function(v)
 			cfg.showDist = v
@@ -557,7 +720,7 @@ module.Elements = {
 	{
 		Type = "Button",
 		Name = "Shoot Murderer",
-		Description = "Shoots the Murderer with Gun",
+		Description = "Fires revolver at Murderer with velocity prediction",
 		Callback = function()
 			shootMurderer()
 		end,
@@ -606,7 +769,7 @@ module.Elements = {
 		Type = "Slider",
 		Name = "Aura Distance",
 		Min = 5,
-		Max = 30,
+		Max = 35,
 		Default = 15,
 		Rounding = 1,
 		Callback = function(v)
@@ -614,12 +777,32 @@ module.Elements = {
 		end,
 	},
 
+	{
+		Type = "Button",
+		Name = "Fling Murderer",
+		Description = "Flings the Murderer and teleports you back to safety",
+		Callback = function()
+			local ok, msg = flingMurderer()
+			apiNotify({ Title = "Fling Murderer", Content = msg or "Done", Duration = 3 })
+		end,
+	},
+
 	{ Type = "Section", Name = "Automation & Utility" },
+
+	{
+		Type = "Button",
+		Name = "Teleport Gun",
+		Description = "Brings dropped gun to your position or grabs it instantly",
+		Callback = function()
+			local ok, msg = bringGun()
+			apiNotify({ Title = "Teleport Gun", Content = msg or "Done", Duration = 3 })
+		end,
+	},
 
 	{
 		Type = "Toggle",
 		Name = "Auto Grab Dropped Gun",
-		Description = "Instantly teleports to and equips dropped gun",
+		Description = "Instantly collects gun the moment Sheriff drops it",
 		Default = false,
 		Callback = function(v)
 			cfg.autoGun = v
@@ -627,12 +810,32 @@ module.Elements = {
 	},
 
 	{
+		Type = "Button",
+		Name = "Coin Grabber",
+		Description = "Teleports all spawned coins in the workspace directly to you",
+		Callback = function()
+			local count = grabCoins()
+			apiNotify({ Title = "Coin Grabber", Content = "Brought " .. tostring(count) .. " coins to you!", Duration = 3 })
+		end,
+	},
+
+	{
 		Type = "Toggle",
 		Name = "Auto Coin Farm",
-		Description = "Collects coins around the map",
+		Description = "Collects coins around the map continuously",
 		Default = false,
 		Callback = function(v)
 			cfg.autoCoins = v
+		end,
+	},
+
+	{
+		Type = "Button",
+		Name = "God Mode",
+		Description = "Clones humanoid to prevent damage (Do not reset while active)",
+		Callback = function()
+			local ok, msg = enableGodmode()
+			apiNotify({ Title = "God Mode", Content = msg, Duration = 4 })
 		end,
 	},
 
@@ -649,10 +852,21 @@ module.Elements = {
 	{ Type = "Section", Name = "Movement" },
 
 	{
+		Type = "Toggle",
+		Name = "Enable WalkSpeed",
+		Description = "Locks custom speed even when equipping or slashing knife",
+		Default = false,
+		Callback = function(v)
+			cfg.speedEnabled = v
+			applyLocalSpeed()
+		end,
+	},
+
+	{
 		Type = "Slider",
 		Name = "WalkSpeed",
 		Min = 16,
-		Max = 150,
+		Max = 200,
 		Default = 16,
 		Rounding = 1,
 		Callback = function(v)
@@ -662,10 +876,21 @@ module.Elements = {
 	},
 
 	{
+		Type = "Toggle",
+		Name = "Enable JumpPower",
+		Description = "Locks custom jump power",
+		Default = false,
+		Callback = function(v)
+			cfg.jumpEnabled = v
+			applyLocalSpeed()
+		end,
+	},
+
+	{
 		Type = "Slider",
 		Name = "JumpPower",
 		Min = 50,
-		Max = 250,
+		Max = 300,
 		Default = 50,
 		Rounding = 1,
 		Callback = function(v)
@@ -673,12 +898,29 @@ module.Elements = {
 			applyLocalSpeed()
 		end,
 	},
+
+	{
+		Type = "Button",
+		Name = "Reset Movement",
+		Description = "Restores default WalkSpeed (16) and JumpPower (50)",
+		Callback = function()
+			cfg.speedEnabled = false
+			cfg.jumpEnabled = false
+			cfg.speed = 16
+			cfg.jumpPow = 50
+			applyLocalSpeed()
+			apiNotify({ Title = "Movement", Content = "Restored default speed and jump", Duration = 2 })
+		end,
+	},
 }
 
 -- init hooks & round persistence
 module.Init = function(api)
+	cachedApi = api
 	if lp.Character then hookLocalHumanoid(lp.Character) end
-	table.insert(conns, lp.CharacterAdded:Connect(hookLocalHumanoid))
+	table.insert(conns, lp.CharacterAdded:Connect(function(newChar)
+		hookLocalHumanoid(newChar)
+	end))
 	table.insert(conns, rs.Heartbeat:Connect(applyLocalSpeed))
 
 	-- round reset & player respawn hooks
@@ -721,16 +963,7 @@ module.Init = function(api)
 			if cfg.gunEsp then pcall(updateGunESP) end
 			if cfg.autoGun then
 				task.spawn(function()
-					pcall(function()
-						local ch = lp.Character
-						if ch and ch:FindFirstChild("HumanoidRootPart") then
-							local oldCf = ch.HumanoidRootPart.CFrame
-							local pos = child:GetPivot().Position
-							ch.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
-							task.wait(0.2)
-							ch.HumanoidRootPart.CFrame = oldCf
-						end
-					end)
+					bringGun()
 				end)
 			end
 		end
@@ -745,6 +978,7 @@ end
 
 -- bulletproof background loop (never dies across rounds)
 module.BackgroundTask = function(api)
+	cachedApi = api
 	while api.Running do
 		pcall(function()
 			-- esp update
@@ -808,13 +1042,16 @@ module.BackgroundTask = function(api)
 			-- auto coin farm
 			if cfg.autoCoins and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
 				pcall(function()
-					for _, obj in ipairs(workspace:GetDescendants()) do
-						if obj.Name == "Coin_Server" or obj.Name == "Coin" then
-							if obj:IsA("BasePart") or obj:IsA("Model") then
-								local coinPos = obj:GetPivot().Position
-								lp.Character.HumanoidRootPart.CFrame = CFrame.new(coinPos + Vector3.new(0, 1.5, 0))
-								task.wait(0.3)
-								break
+					local count = grabCoins()
+					if count == 0 then
+						for _, obj in ipairs(workspace:GetDescendants()) do
+							if obj.Name == "Coin_Server" or obj.Name == "Coin" then
+								if obj:IsA("BasePart") or obj:IsA("Model") then
+									local coinPos = obj:GetPivot().Position
+									lp.Character.HumanoidRootPart.CFrame = CFrame.new(coinPos + Vector3.new(0, 1.5, 0))
+									task.wait(0.25)
+									break
+								end
 							end
 						end
 					end
