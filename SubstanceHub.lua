@@ -12,119 +12,7 @@ if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
--- key system (memory only)
-local VALID_KEY = "releasehellyeah"
-
-if not _G.SubstanceKeyValid then
-	local plr = game:GetService("Players").LocalPlayer
-	local pg = plr:WaitForChild("PlayerGui")
-
-	local sg = Instance.new("ScreenGui")
-	sg.Name = "SubstanceKeyGui"
-	sg.ResetOnSpawn = false
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	sg.Parent = pg
-
-	local bg = Instance.new("Frame")
-	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(8, 6, 14)
-	bg.BackgroundTransparency = 0.35
-	bg.BorderSizePixel = 0
-	bg.Parent = sg
-
-	local card = Instance.new("Frame")
-	card.Size = UDim2.fromOffset(360, 210)
-	card.Position = UDim2.new(0.5, -180, 0.5, -105)
-	card.BackgroundColor3 = Color3.fromRGB(18, 14, 28)
-	card.BorderSizePixel = 0
-	card.Parent = sg
-
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke", card)
-	stroke.Color = Color3.fromRGB(138, 43, 226)
-	stroke.Thickness = 1.5
-
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 0, 36)
-	title.Position = UDim2.fromOffset(0, 16)
-	title.BackgroundTransparency = 1
-	title.Text = "Substance"
-	title.TextColor3 = Color3.fromRGB(210, 150, 255)
-	title.TextSize = 22
-	title.Font = Enum.Font.GothamBold
-	title.Parent = card
-
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(1, 0, 0, 20)
-	subtitle.Position = UDim2.fromOffset(0, 52)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Enter key to continue"
-	subtitle.TextColor3 = Color3.fromRGB(150, 130, 180)
-	subtitle.TextSize = 13
-	subtitle.Font = Enum.Font.Gotham
-	subtitle.Parent = card
-
-	local input = Instance.new("TextBox")
-	input.Size = UDim2.new(0.82, 0, 0, 36)
-	input.Position = UDim2.new(0.09, 0, 0, 88)
-	input.BackgroundColor3 = Color3.fromRGB(28, 22, 44)
-	input.BorderSizePixel = 0
-	input.Text = ""
-	input.PlaceholderText = "paste key here..."
-	input.PlaceholderColor3 = Color3.fromRGB(100, 85, 130)
-	input.TextColor3 = Color3.fromRGB(240, 230, 255)
-	input.TextSize = 14
-	input.Font = Enum.Font.Gotham
-	input.ClearTextOnFocus = false
-	input.Parent = card
-	Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
-	local istroke = Instance.new("UIStroke", input)
-	istroke.Color = Color3.fromRGB(65, 50, 95)
-
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.82, 0, 0, 36)
-	btn.Position = UDim2.new(0.09, 0, 0, 136)
-	btn.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
-	btn.BorderSizePixel = 0
-	btn.Text = "Submit"
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.TextSize = 14
-	btn.Font = Enum.Font.GothamBold
-	btn.Parent = card
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
-	local status = Instance.new("TextLabel")
-	status.Size = UDim2.new(1, 0, 0, 20)
-	status.Position = UDim2.fromOffset(0, 180)
-	status.BackgroundTransparency = 1
-	status.Text = ""
-	status.TextColor3 = Color3.fromRGB(255, 80, 80)
-	status.TextSize = 12
-	status.Font = Enum.Font.Gotham
-	status.Parent = card
-
-	local keyAccepted = false
-
-	btn.MouseButton1Click:Connect(function()
-		local val = input.Text:gsub("%s+", "")
-		if val == VALID_KEY then
-			keyAccepted = true
-			_G.SubstanceKeyValid = true
-			status.TextColor3 = Color3.fromRGB(80, 230, 120)
-			status.Text = "Key accepted"
-			task.wait(0.4)
-			sg:Destroy()
-		else
-			status.TextColor3 = Color3.fromRGB(255, 80, 80)
-			status.Text = "Invalid key"
-			input.Text = ""
-		end
-	end)
-
-	repeat task.wait(0.1) until keyAccepted
-end
-
--- loader helpers
+-- loader helper
 local function fetchScript(url, fallbackFile)
 	local content = ""
 	pcall(function()
@@ -173,12 +61,92 @@ local SubstanceModules = fetchScript(
 	"SubstanceModules.lua"
 )
 
+-- key system (fluent ui based)
+local VALID_KEY = "releasehellyeah"
+local DISCORD_INVITE = "https://discord.gg/substance"
+
+if not _G.SubstanceKeyValid then
+	local KeyWindow = Fluent:CreateWindow({
+		Title = "Substance",
+		SubTitle = "Key System",
+		TabWidth = 140,
+		Size = UDim2.fromOffset(460, 310),
+		Acrylic = true,
+		Theme = "Amethyst",
+		MinimizeKey = Enum.KeyCode.End,
+	})
+
+	local keyTab = KeyWindow:AddTab({ Title = "Access", Icon = "key" })
+
+	keyTab:AddSection("Verification")
+	keyTab:AddParagraph({
+		Title = "Welcome to Substance",
+		Content = "Enter your key below to unlock the hub.\nJoin our Discord server to get the key.",
+	})
+
+	local enteredKey = ""
+	keyTab:AddInput("KeyInput", {
+		Title = "Key",
+		Default = "",
+		Placeholder = "Paste key here...",
+		Callback = function(v)
+			enteredKey = v
+		end,
+	})
+
+	local keyVerified = false
+
+	keyTab:AddButton({
+		Title = "Submit Key",
+		Description = "Verifies your key and loads the hub",
+		Callback = function()
+			local clean = enteredKey:gsub("%s+", "")
+			if clean == VALID_KEY then
+				_G.SubstanceKeyValid = true
+				keyVerified = true
+				Fluent:Notify({
+					Title = "Key Accepted",
+					Content = "Loading Substance Hub...",
+					Duration = 2,
+				})
+				task.wait(0.4)
+				KeyWindow:Destroy()
+			else
+				Fluent:Notify({
+					Title = "Invalid Key",
+					Content = "Incorrect key. Check our Discord for the key.",
+					Duration = 3,
+				})
+			end
+		end,
+	})
+
+	keyTab:AddButton({
+		Title = "Join Discord",
+		Description = "Copies our Discord invite to your clipboard",
+		Callback = function()
+			pcall(function()
+				setclipboard(DISCORD_INVITE)
+			end)
+			Fluent:Notify({
+				Title = "Discord Invite Copied",
+				Content = "Copied " .. DISCORD_INVITE .. " to clipboard!",
+				Duration = 4,
+			})
+		end,
+	})
+
+	repeat task.wait(0.1) until keyVerified
+end
+
 -- game detection
 local mps = game:GetService("MarketplaceService")
 local plrs = game:GetService("Players")
+local rs = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
 local lp = plrs.LocalPlayer
 local gameId = game.PlaceId
-local gameName = "Unknown Game"
+local gameName = "Universal"
 
 pcall(function()
 	local info = mps:GetProductInfo(gameId)
@@ -205,7 +173,7 @@ if currentGame then
 	gameName = currentGame.Name
 end
 
--- create acrylic glass window
+-- create main acrylic window (theme locked to Amethyst)
 local Window = Fluent:CreateWindow({
 	Title = "Substance",
 	SubTitle = gameName,
@@ -222,19 +190,146 @@ Fluent:Notify({
 	Duration = 4,
 })
 
+-- movement & character controller
+local charMods = {
+	speed = 16,
+	jump = 50,
+	noclip = false,
+	antiFling = false,
+	infJump = false,
+}
+
+local noclipConn = nil
+local antiFlingConn = nil
+local infJumpConn = nil
+
+local function applySpeedAndJump()
+	pcall(function()
+		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+			local hum = lp.Character.Humanoid
+			if charMods.speed ~= 16 and hum.WalkSpeed ~= charMods.speed then
+				hum.WalkSpeed = charMods.speed
+			end
+			if charMods.jump ~= 50 and hum.JumpPower ~= charMods.jump then
+				hum.JumpPower = charMods.jump
+			end
+		end
+	end)
+end
+
+local function hookCharacter(ch)
+	local hum = ch:WaitForChild("Humanoid", 5)
+	if hum then
+		hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+			if charMods.speed ~= 16 and hum.WalkSpeed ~= charMods.speed then
+				hum.WalkSpeed = charMods.speed
+			end
+		end)
+		hum:GetPropertyChangedSignal("JumpPower"):Connect(function()
+			if charMods.jump ~= 50 and hum.JumpPower ~= charMods.jump then
+				hum.JumpPower = charMods.jump
+			end
+		end)
+	end
+	applySpeedAndJump()
+end
+
+if lp.Character then hookCharacter(lp.Character) end
+lp.CharacterAdded:Connect(hookCharacter)
+rs.Heartbeat:Connect(applySpeedAndJump)
+
+-- safe noclip (keeps floor collision so you don't fall through the ground)
+local function setNoclip(v)
+	charMods.noclip = v
+	if v then
+		if not noclipConn then
+			noclipConn = rs.Stepped:Connect(function()
+				if charMods.noclip and lp.Character then
+					pcall(function()
+						for _, part in ipairs(lp.Character:GetDescendants()) do
+							if part:IsA("BasePart") then
+								local pn = part.Name:lower()
+								-- keep feet/lower legs collidable so you stay on the ground
+								if pn:find("foot") or pn:find("lowerleg") or pn:find("leftleg") or pn:find("rightleg") then
+									part.CanCollide = true
+								else
+									part.CanCollide = false
+								end
+							end
+						end
+					end)
+				end
+			end)
+		end
+	else
+		if noclipConn then
+			noclipConn:Disconnect()
+			noclipConn = nil
+		end
+		-- restore full collision
+		pcall(function()
+			if lp.Character then
+				for _, part in ipairs(lp.Character:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.CanCollide = true
+					end
+				end
+			end
+		end)
+	end
+end
+
+-- anti-fling
+local function setAntiFling(v)
+	charMods.antiFling = v
+	if v then
+		if not antiFlingConn then
+			antiFlingConn = rs.Stepped:Connect(function()
+				if not charMods.antiFling then return end
+				pcall(function()
+					for _, p in ipairs(plrs:GetPlayers()) do
+						if p ~= lp and p.Character then
+							for _, part in ipairs(p.Character:GetChildren()) do
+								if part:IsA("BasePart") then
+									part.CanCollide = false
+								end
+							end
+						end
+					end
+
+					if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+						local hrp = lp.Character.HumanoidRootPart
+						if hrp.AssemblyLinearVelocity.Magnitude > 75 then
+							hrp.AssemblyLinearVelocity = Vector3.zero
+						end
+						if hrp.AssemblyAngularVelocity.Magnitude > 75 then
+							hrp.AssemblyAngularVelocity = Vector3.zero
+						end
+					end
+				end)
+			end)
+		end
+	else
+		if antiFlingConn then
+			antiFlingConn:Disconnect()
+			antiFlingConn = nil
+		end
+	end
+end
+
 -- home tab
 local homeTab = Window:AddTab({ Title = "Home", Icon = "home" })
 
 homeTab:AddSection("Session")
 homeTab:AddParagraph({
-	Title = "Welcome",
+	Title = "Player Information",
 	Content = "User: " .. (lp and lp.Name or "Player") .. "\nGame: " .. gameName .. "\nPlace ID: " .. tostring(gameId),
 })
 
-homeTab:AddSection("Actions")
+homeTab:AddSection("Server Actions")
 homeTab:AddButton({
 	Title = "Rejoin Server",
-	Description = "Reconnects to this server",
+	Description = "Reconnects to current server",
 	Callback = function()
 		pcall(function()
 			game:GetService("TeleportService"):TeleportToPlaceInstance(gameId, game.JobId, lp)
@@ -244,7 +339,7 @@ homeTab:AddButton({
 
 homeTab:AddButton({
 	Title = "Server Hop",
-	Description = "Finds another server",
+	Description = "Finds another active server",
 	Callback = function()
 		pcall(function()
 			game:GetService("TeleportService"):Teleport(gameId, lp)
@@ -256,14 +351,8 @@ homeTab:AddButton({
 	Title = "Copy Place ID",
 	Description = "Copies Place ID to clipboard",
 	Callback = function()
-		pcall(function()
-			setclipboard(tostring(gameId))
-		end)
-		Fluent:Notify({
-			Title = "Copied",
-			Content = "Place ID copied to clipboard",
-			Duration = 2,
-		})
+		pcall(function() setclipboard(tostring(gameId)) end)
+		Fluent:Notify({ Title = "Copied", Content = "Place ID copied to clipboard", Duration = 2 })
 	end,
 })
 
@@ -278,11 +367,8 @@ playerTab:AddSlider("WalkSpeed", {
 	Default = 16,
 	Rounding = 1,
 	Callback = function(v)
-		pcall(function()
-			if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-				lp.Character.Humanoid.WalkSpeed = v
-			end
-		end)
+		charMods.speed = v
+		applySpeedAndJump()
 	end,
 })
 
@@ -293,24 +379,19 @@ playerTab:AddSlider("JumpPower", {
 	Default = 50,
 	Rounding = 1,
 	Callback = function(v)
-		pcall(function()
-			if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-				lp.Character.Humanoid.JumpPower = v
-			end
-		end)
+		charMods.jump = v
+		applySpeedAndJump()
 	end,
 })
 
-local infJumpActive = false
-local infJumpConn = nil
 playerTab:AddToggle("InfiniteJump", {
 	Title = "Infinite Jump",
 	Default = false,
 	Callback = function(v)
-		infJumpActive = v
+		charMods.infJump = v
 		if v and not infJumpConn then
-			infJumpConn = game:GetService("UserInputService").JumpRequest:Connect(function()
-				if infJumpActive and lp.Character and lp.Character:FindFirstChild("Humanoid") then
+			infJumpConn = uis.JumpRequest:Connect(function()
+				if charMods.infJump and lp.Character and lp.Character:FindFirstChild("Humanoid") then
 					pcall(function()
 						lp.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 					end)
@@ -323,29 +404,106 @@ playerTab:AddToggle("InfiniteJump", {
 	end,
 })
 
-local noclipActive = false
-local noclipConn = nil
 playerTab:AddToggle("Noclip", {
 	Title = "Noclip",
+	Description = "Pass through walls without falling through the floor",
 	Default = false,
 	Callback = function(v)
-		noclipActive = v
-		if v and not noclipConn then
-			noclipConn = game:GetService("RunService").Stepped:Connect(function()
-				if noclipActive and lp.Character then
-					pcall(function()
-						for _, part in ipairs(lp.Character:GetDescendants()) do
-							if part:IsA("BasePart") then
-								part.CanCollide = false
-							end
-						end
-					end)
-				end
-			end)
-		elseif not v and noclipConn then
-			noclipConn:Disconnect()
-			noclipConn = nil
+		setNoclip(v)
+	end,
+})
+
+playerTab:AddSection("Defense & Trolling")
+playerTab:AddToggle("AntiFling", {
+	Title = "Anti Fling",
+	Description = "Prevents other players from pushing or flinging you",
+	Default = false,
+	Callback = function(v)
+		setAntiFling(v)
+	end,
+})
+
+local selectedFlingTarget = ""
+local flingDropdown = nil
+
+local function getPlayerNames()
+	local names = {}
+	for _, p in ipairs(plrs:GetPlayers()) do
+		if p ~= lp then
+			table.insert(names, p.DisplayName .. " (@" .. p.Name .. ")")
 		end
+	end
+	return names
+end
+
+flingDropdown = playerTab:AddDropdown("FlingTarget", {
+	Title = "Target Player",
+	Values = getPlayerNames(),
+	Multi = false,
+	Default = "",
+	Callback = function(v)
+		selectedFlingTarget = v or ""
+	end,
+})
+
+playerTab:AddButton({
+	Title = "Refresh Player List",
+	Callback = function()
+		if flingDropdown then
+			flingDropdown:SetValues(getPlayerNames())
+		end
+	end,
+})
+
+playerTab:AddButton({
+	Title = "Fling Target",
+	Description = "Launches target player across the map",
+	Callback = function()
+		if selectedFlingTarget == "" then
+			Fluent:Notify({ Title = "Fling", Content = "Select a target first!", Duration = 2 })
+			return
+		end
+
+		local targetUser = selectedFlingTarget:match("@([%w_]+)")
+		local target = nil
+		for _, p in ipairs(plrs:GetPlayers()) do
+			if p.Name == targetUser or p.DisplayName == selectedFlingTarget then
+				target = p
+				break
+			end
+		end
+
+		if not target or not target.Character then
+			Fluent:Notify({ Title = "Fling", Content = "Target character not found", Duration = 2 })
+			return
+		end
+
+		local ch = lp.Character
+		local tch = target.Character
+		if not ch or not tch then return end
+		local hrp = ch:FindFirstChild("HumanoidRootPart")
+		local thrp = tch:FindFirstChild("HumanoidRootPart")
+		if not hrp or not thrp then return end
+
+		local oldPos = hrp.CFrame
+		local bav = Instance.new("BodyAngularVelocity")
+		bav.AngularVelocity = Vector3.new(99999, 99999, 99999)
+		bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		bav.P = math.huge
+		bav.Parent = hrp
+
+		task.spawn(function()
+			local t0 = tick()
+			while tick() - t0 < 1.8 and thrp.Parent do
+				hrp.CFrame = thrp.CFrame
+				task.wait()
+			end
+			bav:Destroy()
+			hrp.AssemblyLinearVelocity = Vector3.zero
+			hrp.AssemblyAngularVelocity = Vector3.zero
+			task.wait(0.1)
+			hrp.CFrame = oldPos
+		end)
 	end,
 })
 
@@ -360,19 +518,13 @@ if currentGame and SubstanceModules then
 	end
 end
 
--- settings tab
+-- settings tab (theme locked, discord button included)
 local settingsTab = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
-settingsTab:AddSection("Theme")
-settingsTab:AddDropdown("ThemeSelect", {
-	Title = "Color Theme",
-	Values = { "Amethyst", "Dark", "Rose", "Aqua", "Light" },
-	Default = "Amethyst",
-	Callback = function(v)
-		if Fluent.SetTheme then
-			Fluent:SetTheme(v)
-		end
-	end,
+settingsTab:AddSection("Appearance")
+settingsTab:AddParagraph({
+	Title = "Theme Locked",
+	Content = "Substance is permanently tailored with the Amethyst Acrylic aesthetic.",
 })
 
 settingsTab:AddToggle("AcrylicToggle", {
@@ -385,21 +537,36 @@ settingsTab:AddToggle("AcrylicToggle", {
 	end,
 })
 
-settingsTab:AddSection("Management")
+settingsTab:AddSection("Community")
+settingsTab:AddButton({
+	Title = "Join Discord",
+	Description = "Copies official Discord server link",
+	Callback = function()
+		pcall(function() setclipboard(DISCORD_INVITE) end)
+		Fluent:Notify({
+			Title = "Discord Invite",
+			Content = "Copied " .. DISCORD_INVITE .. " to clipboard!",
+			Duration = 4,
+		})
+	end,
+})
+
+settingsTab:AddSection("Hub Management")
 settingsTab:AddParagraph({
-	Title = "Controls",
-	Content = "Press Left Control to minimize or restore the menu",
+	Title = "Hotkey",
+	Content = "Press Left Control to toggle interface visibility",
 })
 
 settingsTab:AddButton({
 	Title = "Unload Hub",
-	Description = "Closes Substance and cleans up connections",
+	Description = "Closes Substance and cleans up all active scripts",
 	Callback = function()
 		if SubstanceModules then
 			SubstanceModules:UnloadAll()
 		end
+		setNoclip(false)
+		setAntiFling(false)
 		if infJumpConn then infJumpConn:Disconnect() end
-		if noclipConn then noclipConn:Disconnect() end
 		Window:Destroy()
 	end,
 })

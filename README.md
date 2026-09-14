@@ -27,27 +27,34 @@ Or run via the loader:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/LilacTheNobody/Substance/main/SubstanceLoader.lua"))()
 ```
 
-**Key:** `releasehellyeah`
+**Key:** `releasehellyeah`  
+**Discord:** `https://discord.gg/substance`
 
 ---
 
 ### Features
 
-- **Acrylic Glass UI** — Powered by Fluent with translucent dark purple glass styling and smooth spring animations
-- **Left Control** — Press `LeftControl` at any time to toggle the menu open or closed
+- **Acrylic Glass UI** — Fluent UI window with frosted dark purple glass styling and spring animations
+- **Fluent Key System** — Key verification with Discord invite button
+- **Left Control** — Press `LeftControl` at any time to toggle menu visibility
 
 #### Universal
-- WalkSpeed & JumpPower modifiers
-- Infinite Jump & Noclip
-- Server Hop, Rejoin & Copy Place ID
-- Anti-AFK (idle kick prevention)
+- **Safe Noclip** — Walk through walls and doors without falling through the floor
+- **Persistent Speed & Jump** — Never gets cancelled by tool equip or attack animations
+- **Anti Fling** — Immune to physics pushes and player collision flinging
+- **Fling Player** — Select any target player and launch them with high-torque physics
+- **Infinite Jump**
+- **Server Hop, Rejoin & Copy Place ID**
+- **Anti-AFK** — Prevents idle disconnects
 
 #### Murder Mystery 2
-- **Master ESP Toggle** with Multi-Select role filter (Murderer, Sheriff, Innocent)
-- **Dropped Gun ESP** with 3D marker
-- **ESP Labels** displaying player display names and live distance
-- **Combat Utilities** — Shoot Murderer, Auto Shoot, Knife Aura with distance tuning
-- **Automation** — Auto Grab Dropped Gun, Auto Coin Collect
+- **Accurate Role Detection** — Instant tracking of Murderer and Sheriff across Backpack, Character, and holstered weapons
+- **Multi-Round Persistence** — ESP and combat loops continue across round resets and respawns
+- **Master ESP Toggle** with Multi-Select filter (`Murderer`, `Sheriff`, `Innocent`)
+- **Visual ESP** — Clean AlwaysOnTop highlights with Gotham bold role tags and live distance meters
+- **Dropped Gun ESP** — Gold highlight with 3D distance label
+- **Combat** — Shoot Murderer (with target velocity prediction), Auto Shoot, Kill All, Auto Kill All, Knife Aura with distance slider
+- **Automation** — Auto Grab Dropped Gun, Auto Coin Farm
 
 ---
 
