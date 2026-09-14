@@ -354,7 +354,7 @@ local function setAntiFling(v)
 	end
 end
 
--- reliable anti-void (catches player as soon as falling into the void on any map, spawns platform, and teleports back)
+-- rainbow steel anti-void (spawns an animated RGB diamond plate platform beneath you without teleporting you away)
 local function setAntiVoid(v)
 	charMods.antiVoid = v
 	if v then
@@ -362,6 +362,11 @@ local function setAntiVoid(v)
 			antiVoidConn = rs.Heartbeat:Connect(function()
 				if not charMods.antiVoid then return end
 				pcall(function()
+					-- animate RGB rainbow on existing platform every frame
+					if voidPlatform and voidPlatform.Parent then
+						voidPlatform.Color = Color3.fromHSV((tick() * 0.5) % 1, 0.95, 1)
+					end
+
 					if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") and lp.Character:FindFirstChild("Humanoid") then
 						local hrp = lp.Character.HumanoidRootPart
 						local hum = lp.Character.Humanoid
@@ -378,8 +383,22 @@ local function setAntiVoid(v)
 							isVoid = true
 						end
 
-						-- check 2: fallen well below last recorded safe ground with no part beneath
-						if not isVoid and lastSafeCFrame and (lastSafeCFrame.Position.Y - hrp.Position.Y) > 40 then
+						-- check 2: falling below last recorded safe ground with no part beneath
+						if not isVoid and lastSafeCFrame and (lastSafeCFrame.Position.Y - hrp.Position.Y) > 35 then
+							local rayParams = RaycastParams.new()
+							rayParams.FilterType = RaycastFilterType.Exclude
+							local ignoreList = { lp.Character }
+							if voidPlatform then table.insert(ignoreList, voidPlatform) end
+							rayParams.FilterDescendantsInstances = ignoreList
+
+							local rayResult = workspace:Raycast(hrp.Position, Vector3.new(0, -70, 0), rayParams)
+							if not rayResult then
+								isVoid = true
+							end
+						end
+
+						-- check 3: low negative altitude without any ground
+						if not isVoid and hrp.Position.Y < -30 then
 							local rayParams = RaycastParams.new()
 							rayParams.FilterType = RaycastFilterType.Exclude
 							local ignoreList = { lp.Character }
@@ -392,59 +411,34 @@ local function setAntiVoid(v)
 							end
 						end
 
-						-- check 3: low negative altitude without any ground
-						if not isVoid and hrp.Position.Y < -35 then
-							local rayParams = RaycastParams.new()
-							rayParams.FilterType = RaycastFilterType.Exclude
-							local ignoreList = { lp.Character }
-							if voidPlatform then table.insert(ignoreList, voidPlatform) end
-							rayParams.FilterDescendantsInstances = ignoreList
-
-							local rayResult = workspace:Raycast(hrp.Position, Vector3.new(0, -100, 0), rayParams)
-							if not rayResult then
-								isVoid = true
-							end
-						end
-
 						if isVoid then
+							-- immediately arrest falling velocity so player lands safely
+							hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X * 0.2, 0, hrp.AssemblyLinearVelocity.Z * 0.2)
+							hrp.AssemblyAngularVelocity = Vector3.zero
+
+							-- create or reposition smaller rainbow steel platform right beneath the player's feet
+							if not voidPlatform or not voidPlatform.Parent then
+								voidPlatform = Instance.new("Part")
+								voidPlatform.Name = "SubstanceVoidPlatform"
+								voidPlatform.Size = Vector3.new(15, 1.2, 15)
+								voidPlatform.Anchored = true
+								voidPlatform.CanCollide = true
+								voidPlatform.Material = Enum.Material.DiamondPlate
+								voidPlatform.Color = Color3.fromHSV((tick() * 0.5) % 1, 0.95, 1)
+								voidPlatform.TopSurface = Enum.SurfaceType.Smooth
+								voidPlatform.BottomSurface = Enum.SurfaceType.Smooth
+								voidPlatform.Parent = workspace
+							end
+
+							voidPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y - 2.8, hrp.Position.Z)
+
 							local now = tick()
-							if now - lastVoidSave > 1.2 then
+							if now - lastVoidSave > 3 then
 								lastVoidSave = now
-
-								-- nullify physics velocity immediately
-								hrp.AssemblyLinearVelocity = Vector3.zero
-								hrp.AssemblyAngularVelocity = Vector3.zero
-
-								local targetCf = lastSafeCFrame and (lastSafeCFrame + Vector3.new(0, 3.5, 0))
-								if not targetCf then
-									targetCf = CFrame.new(hrp.Position.X, 10, hrp.Position.Z)
-								end
-
-								-- create or move neon purple safe platform
-								if not voidPlatform or not voidPlatform.Parent then
-									voidPlatform = Instance.new("Part")
-									voidPlatform.Name = "SubstanceVoidPlatform"
-									voidPlatform.Size = Vector3.new(40, 2, 40)
-									voidPlatform.Anchored = true
-									voidPlatform.CanCollide = true
-									voidPlatform.Material = Enum.Material.Neon
-									voidPlatform.Color = Color3.fromRGB(138, 43, 226)
-									voidPlatform.Parent = workspace
-								end
-
-								voidPlatform.CFrame = CFrame.new(targetCf.Position.X, targetCf.Position.Y - 3, targetCf.Position.Z)
-
-								for _ = 1, 6 do
-									hrp.AssemblyLinearVelocity = Vector3.zero
-									hrp.AssemblyAngularVelocity = Vector3.zero
-									hrp.CFrame = targetCf
-									task.wait(0.02)
-								end
-
 								Fluent:Notify({
 									Title = "Anti Void",
-									Content = "Saved from void! Restored to safe ground.",
-									Duration = 3,
+									Content = "Rainbow steel platform deployed beneath your feet.",
+									Duration = 2.5,
 								})
 							end
 						end
@@ -649,7 +643,7 @@ playerTab:AddToggle("InfiniteJump", {
 
 local noclipToggle = playerTab:AddToggle("Noclip", {
 	Title = "Noclip",
-	Description = "Walk through any wall or obstacle [Key: R]",
+	Description = "Walk through any wall or obstacle",
 	Default = false,
 	Callback = function(v)
 		setNoclip(v)
@@ -659,7 +653,7 @@ local noclipToggle = playerTab:AddToggle("Noclip", {
 playerTab:AddSection("Flight & Vision")
 local flyToggle = playerTab:AddToggle("Fly", {
 	Title = "Fly",
-	Description = "Fly freely with WASD, Space (Up), and Shift (Down) [Key: F]",
+	Description = "Fly freely with WASD, Space (Up), and Shift (Down)",
 	Default = false,
 	Callback = function(v)
 		setFly(v)
@@ -679,7 +673,7 @@ playerTab:AddSlider("FlySpeed", {
 
 local xrayToggle = playerTab:AddToggle("Xray", {
 	Title = "X-Ray",
-	Description = "Makes all map walls and obstacles semi-transparent [Key: X]",
+	Description = "Makes all map walls and obstacles semi-transparent",
 	Default = false,
 	Callback = function(v)
 		setXray(v)
@@ -698,7 +692,7 @@ local antiFlingToggle = playerTab:AddToggle("AntiFling", {
 
 local antiVoidToggle = playerTab:AddToggle("AntiVoid", {
 	Title = "Anti Void",
-	Description = "Catches you if you fall off any map and teleports you back to ground [Key: V]",
+	Description = "Deploys a rainbow steel platform beneath your feet if you fall off the map",
 	Default = false,
 	Callback = function(v)
 		setAntiVoid(v)
@@ -745,28 +739,50 @@ local function flingPlayer(target)
 	if not ch or not tch then return false end
 	local hrp = ch:FindFirstChild("HumanoidRootPart")
 	local thrp = tch:FindFirstChild("HumanoidRootPart")
-	if not hrp or not thrp then return false end
+	local hum = ch:FindFirstChild("Humanoid")
+	local thum = tch:FindFirstChild("Humanoid")
+	if not hrp or not thrp or not hum or not thum or thum.Health <= 0 then return false end
 
 	local savedPos = hrp.CFrame
 
+	-- Ensure root collision is enabled so contact transmits momentum
+	hrp.CanCollide = true
+
 	local bav = Instance.new("BodyAngularVelocity")
-	bav.AngularVelocity = Vector3.new(99999, 99999, 99999)
-	bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+	bav.AngularVelocity = Vector3.new(0, 9999999, 0)
+	bav.MaxTorque = Vector3.new(0, math.huge, 0)
 	bav.P = math.huge
 	bav.Parent = hrp
 
-	local t0 = tick()
-	while tick() - t0 < 1.4 and thrp.Parent do
-		hrp.CFrame = thrp.CFrame
-		task.wait()
-	end
-	bav:Destroy()
+	local bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	bv.Velocity = Vector3.new(0, 1000, 0)
+	bv.Parent = hrp
 
-	for _ = 1, 8 do
+	local t0 = tick()
+	while tick() - t0 < 1.3 and thrp.Parent and thum.Health > 0 do
+		-- Target velocity prediction + aggressive multi-angle ramming
+		local pred = thrp.AssemblyLinearVelocity * 0.04
+		local offset = Vector3.new(math.random(-1, 1) * 0.4, -0.6, math.random(-1, 1) * 0.4)
+		hrp.CFrame = CFrame.new(thrp.Position + offset + pred) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
+		hrp.AssemblyAngularVelocity = Vector3.new(0, 9999999, 0)
+		rs.Heartbeat:Wait()
+
+		-- If target is launched into orbit or dead, finish early
+		if thrp.AssemblyLinearVelocity.Magnitude > 120 or thum.Health <= 0 then
+			break
+		end
+	end
+
+	pcall(function() bav:Destroy() end)
+	pcall(function() bv:Destroy() end)
+
+	-- Lock back to saved position and cancel all momentum
+	for _ = 1, 10 do
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		hrp.CFrame = savedPos
-		task.wait(0.03)
+		rs.RenderStepped:Wait()
 	end
 	return true
 end
@@ -795,8 +811,12 @@ playerTab:AddButton({
 		end
 
 		task.spawn(function()
-			flingPlayer(target)
-			Fluent:Notify({ Title = "Fling", Content = "Fling finished! Returned to safe position.", Duration = 2 })
+			local ok = flingPlayer(target)
+			if ok then
+				Fluent:Notify({ Title = "Fling", Content = "Target flung! Returned to safe position.", Duration = 2 })
+			else
+				Fluent:Notify({ Title = "Fling", Content = "Fling attempt finished.", Duration = 2 })
+			end
 		end)
 	end,
 })
@@ -820,24 +840,6 @@ playerTab:AddButton({
 		end)
 	end,
 })
-
--- keybind hotkey listener (won't trigger while typing in chat or textboxes)
-uis.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed or uis:GetFocusedTextBox() then return end
-	if input.KeyCode == Enum.KeyCode.F then
-		setFly(not charMods.flying)
-		if flyToggle then pcall(function() flyToggle:SetValue(charMods.flying) end) end
-	elseif input.KeyCode == Enum.KeyCode.R then
-		setNoclip(not charMods.noclip)
-		if noclipToggle then pcall(function() noclipToggle:SetValue(charMods.noclip) end) end
-	elseif input.KeyCode == Enum.KeyCode.X then
-		setXray(not charMods.xray)
-		if xrayToggle then pcall(function() xrayToggle:SetValue(charMods.xray) end) end
-	elseif input.KeyCode == Enum.KeyCode.V then
-		setAntiVoid(not charMods.antiVoid)
-		if antiVoidToggle then pcall(function() antiVoidToggle:SetValue(charMods.antiVoid) end) end
-	end
-end)
 
 -- load game specific module
 if currentGame and SubstanceModules then

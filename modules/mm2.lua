@@ -27,8 +27,11 @@ local cfg = {
 		Innocent = false,
 	},
 	gunEsp = true,
+	trapEsp = false,
 	showNames = true,
 	showDist = true,
+	murdererWarn = false,
+	roleAnnounce = true,
 
 	-- combat
 	autoShoot = false,
@@ -54,30 +57,30 @@ local colors = {
 	Sheriff = Color3.fromRGB(35, 135, 255),
 	Innocent = Color3.fromRGB(40, 225, 85),
 	Gun = Color3.fromRGB(255, 215, 0),
+	Trap = Color3.fromRGB(255, 140, 0),
 }
 
 local cachedRoles = {}
 local highlights = {}
 local billboards = {}
+local trapHighlights = {}
 local gunHL = nil
 local gunBB = nil
 local conns = {}
 
--- weapon check helper (gun checked first to prevent misdetection from KnifeServer script)
+-- weapon check helper (strictly checks Tool instances only)
 local function checkItem(item, kind)
-	if not item then return false end
+	if not item or not item:IsA("Tool") then return false end
 	local n = item.Name:lower()
 
 	local isGun = (n == "gun" or n == "revolver" or n:find("gun") ~= nil or n:find("revolver") ~= nil
 		or item:FindFirstChild("GunScript") ~= nil
 		or item:FindFirstChild("ShootGun") ~= nil
-		or item:FindFirstChild("Shoot") ~= nil
 		or item:FindFirstChild("GunLevel") ~= nil)
 
 	local isKnife = (n == "knife" or n:find("knife") ~= nil
 		or item:FindFirstChild("ThrowKnife") ~= nil
 		or item:FindFirstChild("KnifeScript") ~= nil
-		or item:FindFirstChild("Slash") ~= nil
 		or (item:FindFirstChild("KnifeServer") ~= nil and not isGun))
 
 	if kind == "gun" then
@@ -91,21 +94,25 @@ end
 local function scanPlayer(p)
 	if not p or not p.Parent then return nil end
 
-	-- check character first (check gun first!)
+	-- check character first (strictly Tool instances)
 	local ch = p.Character
 	if ch then
 		for _, item in ipairs(ch:GetChildren()) do
-			if checkItem(item, "gun") then return "Sheriff" end
-			if checkItem(item, "knife") then return "Murderer" end
+			if item:IsA("Tool") then
+				if checkItem(item, "gun") then return "Sheriff" end
+				if checkItem(item, "knife") then return "Murderer" end
+			end
 		end
 	end
 
-	-- check backpack (check gun first!)
+	-- check backpack (strictly Tool instances)
 	local bp = p:FindFirstChild("Backpack")
 	if bp then
 		for _, item in ipairs(bp:GetChildren()) do
-			if checkItem(item, "gun") then return "Sheriff" end
-			if checkItem(item, "knife") then return "Murderer" end
+			if item:IsA("Tool") then
+				if checkItem(item, "gun") then return "Sheriff" end
+				if checkItem(item, "knife") then return "Murderer" end
+			end
 		end
 	end
 
@@ -189,6 +196,13 @@ end
 local function clearGunESP()
 	if gunHL then pcall(function() gunHL:Destroy() end); gunHL = nil end
 	if gunBB then pcall(function() gunBB:Destroy() end); gunBB = nil end
+end
+
+local function clearTrapESP()
+	for _, hl in pairs(trapHighlights) do
+		pcall(function() hl:Destroy() end)
+	end
+	trapHighlights = {}
 end
 
 -- high quality esp renderer
@@ -351,6 +365,31 @@ local function updateGunESP()
 		if gt then
 			local dist = math.floor((lp.Character.HumanoidRootPart.Position - gd:GetPivot().Position).Magnitude)
 			gt.Text = "[DROPPED GUN] " .. tostring(dist) .. "m"
+		end
+	end
+end
+
+-- trap esp
+local function updateTrapESP()
+	if not cfg.trapEsp then
+		clearTrapESP()
+		return
+	end
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Name:lower():find("trap") ~= nil then
+			if not obj:IsDescendantOf(lp.Character or workspace) == false and not trapHighlights[obj] then
+				local hl = Instance.new("Highlight")
+				hl.Name = "SubTrapESP"
+				hl.Adornee = obj
+				hl.FillColor = colors.Trap
+				hl.FillTransparency = 0.45
+				hl.OutlineColor = colors.Trap
+				hl.OutlineTransparency = 0
+				hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				hl.Parent = obj
+				trapHighlights[obj] = hl
+			end
 		end
 	end
 end
@@ -519,6 +558,25 @@ local function grabCoins()
 	return count
 end
 
+-- disarm traps
+local function disarmTraps()
+	local count = 0
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Name:lower():find("trap") ~= nil then
+			pcall(function()
+				if obj:IsA("BasePart") then
+					obj.CFrame = CFrame.new(0, -500, 0)
+					obj.CanCollide = false
+				elseif obj:IsA("Model") then
+					obj:PivotTo(CFrame.new(0, -500, 0))
+				end
+				count = count + 1
+			end)
+		end
+	end
+	return count
+end
+
 -- humanoid duplication godmode
 local function enableGodmode()
 	local ch = lp.Character
@@ -543,7 +601,7 @@ local function enableGodmode()
 	return true, "God Mode active! (Do not reset character)"
 end
 
--- fling murderer
+-- aggressive multi-angle skid fling on murderer
 local function flingMurderer()
 	local m = getMurderer()
 	if not m or not m.Character then return false, "Murderer not found or dead" end
@@ -552,28 +610,45 @@ local function flingMurderer()
 	if not ch or not tch then return false, "Character not ready" end
 	local hrp = ch:FindFirstChild("HumanoidRootPart")
 	local thrp = tch:FindFirstChild("HumanoidRootPart")
-	if not hrp or not thrp then return false, "RootPart not ready" end
+	local thum = tch:FindFirstChild("Humanoid")
+	if not hrp or not thrp or not thum or thum.Health <= 0 then return false, "Murderer not alive" end
 
 	local savedPos = hrp.CFrame
 
+	hrp.CanCollide = true
+
 	local bav = Instance.new("BodyAngularVelocity")
-	bav.AngularVelocity = Vector3.new(99999, 99999, 99999)
-	bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+	bav.AngularVelocity = Vector3.new(0, 9999999, 0)
+	bav.MaxTorque = Vector3.new(0, math.huge, 0)
 	bav.P = math.huge
 	bav.Parent = hrp
 
-	local t0 = tick()
-	while tick() - t0 < 1.4 and thrp.Parent do
-		hrp.CFrame = thrp.CFrame
-		task.wait()
-	end
-	bav:Destroy()
+	local bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+	bv.Velocity = Vector3.new(0, 1000, 0)
+	bv.Parent = hrp
 
-	for _ = 1, 8 do
+	local t0 = tick()
+	while tick() - t0 < 1.3 and thrp.Parent and thum.Health > 0 do
+		local pred = thrp.AssemblyLinearVelocity * 0.04
+		local offset = Vector3.new(math.random(-1, 1) * 0.4, -0.6, math.random(-1, 1) * 0.4)
+		hrp.CFrame = CFrame.new(thrp.Position + offset + pred) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
+		hrp.AssemblyAngularVelocity = Vector3.new(0, 9999999, 0)
+		rs.Heartbeat:Wait()
+
+		if thrp.AssemblyLinearVelocity.Magnitude > 120 or thum.Health <= 0 then
+			break
+		end
+	end
+
+	pcall(function() bav:Destroy() end)
+	pcall(function() bv:Destroy() end)
+
+	for _ = 1, 10 do
 		hrp.AssemblyLinearVelocity = Vector3.zero
 		hrp.AssemblyAngularVelocity = Vector3.zero
 		hrp.CFrame = savedPos
-		task.wait(0.03)
+		rs.RenderStepped:Wait()
 	end
 	return true, "Murderer flung!"
 end
@@ -614,12 +689,49 @@ local function hookLocalHumanoid(ch)
 	applyLocalSpeed()
 end
 
+-- warning & announcer helpers
+local lastWarnTime = 0
+local lastAnnouncedRound = nil
+
+local function checkMurdererWarning()
+	if not cfg.murdererWarn then return end
+	if getRole(lp) == "Murderer" then return end
+
+	local m = getMurderer()
+	if m and m.Character and m.Character:FindFirstChild("HumanoidRootPart") and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+		local dist = math.floor((lp.Character.HumanoidRootPart.Position - m.Character.HumanoidRootPart.Position).Magnitude)
+		if dist <= 35 and (tick() - lastWarnTime > 6) then
+			lastWarnTime = tick()
+			apiNotify({
+				Title = "Murderer Nearby",
+				Content = "Watch out! " .. m.DisplayName .. " is " .. tostring(dist) .. "m away!",
+				Duration = 3,
+			})
+		end
+	end
+end
+
+local function checkRoleAnnounce()
+	if not cfg.roleAnnounce then return end
+	local m = getMurderer()
+	local s = getSheriff()
+	if m and m ~= lastAnnouncedRound then
+		lastAnnouncedRound = m
+		local sName = s and s.DisplayName or "None / Dropped"
+		apiNotify({
+			Title = "Round Roles",
+			Content = "Murderer: " .. m.DisplayName .. "\nSheriff: " .. sName,
+			Duration = 4.5,
+		})
+	end
+end
+
 -- module metadata
 module.Name = "MM2"
 module.GameId = 142823291
 module.GameName = "Murder Mystery 2"
 module.Author = "Substance"
-module.Version = "2.3"
+module.Version = "2.4"
 module.Icon = "crosshair"
 
 -- ui elements
@@ -692,6 +804,17 @@ module.Elements = {
 		Callback = function(v)
 			cfg.gunEsp = v
 			if not v then clearGunESP() end
+		end,
+	},
+
+	{
+		Type = "Toggle",
+		Name = "Trap ESP",
+		Description = "Highlights murderer traps in bright orange",
+		Default = false,
+		Callback = function(v)
+			cfg.trapEsp = v
+			if not v then clearTrapESP() end
 		end,
 	},
 
@@ -780,10 +903,14 @@ module.Elements = {
 	{
 		Type = "Button",
 		Name = "Fling Murderer",
-		Description = "Flings the Murderer and teleports you back to safety",
+		Description = "Launches the Murderer into orbit and teleports you back safely",
 		Callback = function()
 			local ok, msg = flingMurderer()
-			apiNotify({ Title = "Fling Murderer", Content = msg or "Done", Duration = 3 })
+			if ok then
+				apiNotify({ Title = "Fling Murderer", Content = msg or "Murderer flung!", Duration = 3 })
+			else
+				apiNotify({ Title = "Fling Murderer", Content = msg or "Failed to fling", Duration = 2 })
+			end
 		end,
 	},
 
@@ -826,6 +953,36 @@ module.Elements = {
 		Default = false,
 		Callback = function(v)
 			cfg.autoCoins = v
+		end,
+	},
+
+	{
+		Type = "Button",
+		Name = "Disarm Traps",
+		Description = "Removes all murderer traps on the map",
+		Callback = function()
+			local count = disarmTraps()
+			apiNotify({ Title = "Traps Disarmed", Content = "Removed " .. tostring(count) .. " traps!", Duration = 3 })
+		end,
+	},
+
+	{
+		Type = "Toggle",
+		Name = "Murderer Warning",
+		Description = "Warns you when the Murderer is within 35 studs",
+		Default = false,
+		Callback = function(v)
+			cfg.murdererWarn = v
+		end,
+	},
+
+	{
+		Type = "Toggle",
+		Name = "Role Announcer",
+		Description = "Notifies who the Murderer and Sheriff are at round start",
+		Default = true,
+		Callback = function(v)
+			cfg.roleAnnounce = v
 		end,
 	},
 
@@ -995,6 +1152,15 @@ module.BackgroundTask = function(api)
 				pcall(updateGunESP)
 			end
 
+			-- trap esp update
+			if cfg.trapEsp then
+				pcall(updateTrapESP)
+			end
+
+			-- proximity & announcer
+			checkMurdererWarning()
+			checkRoleAnnounce()
+
 			-- auto shoot murderer
 			if cfg.autoShoot then
 				pcall(function()
@@ -1070,6 +1236,7 @@ end
 module.Cleanup = function()
 	clearAllESP()
 	clearGunESP()
+	clearTrapESP()
 	cachedRoles = {}
 
 	for _, c in ipairs(conns) do
