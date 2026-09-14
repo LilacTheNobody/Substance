@@ -138,7 +138,7 @@ if not _G.SubstanceKeyValid then
 		end,
 	})
 
-	-- Select the tab so the Access tab is active immediately upon opening
+	-- Select tab so it is open and visible immediately
 	KeyWindow:SelectTab(1)
 
 	repeat task.wait(0.1) until keyVerified
@@ -207,12 +207,15 @@ local charMods = {
 	jump = 50,
 	noclip = false,
 	antiFling = false,
+	antiVoid = false,
 	infJump = false,
 }
 
 local noclipConn = nil
 local antiFlingConn = nil
+local antiVoidConn = nil
 local infJumpConn = nil
+local voidPlatform = nil
 
 local function applySpeedAndJump()
 	pcall(function()
@@ -249,26 +252,35 @@ if lp.Character then hookCharacter(lp.Character) end
 lp.CharacterAdded:Connect(hookCharacter)
 rs.Heartbeat:Connect(applySpeedAndJump)
 
--- safe noclip (keeps floor collision so you don't fall through the ground)
+-- working noclip (walk through any wall/barrier with floor raycast protection)
 local function setNoclip(v)
 	charMods.noclip = v
 	if v then
 		if not noclipConn then
 			noclipConn = rs.Stepped:Connect(function()
-				if charMods.noclip and lp.Character then
-					pcall(function()
-						for _, part in ipairs(lp.Character:GetDescendants()) do
-							if part:IsA("BasePart") then
-								local pn = part.Name:lower()
-								-- keep feet/lower legs collidable so you stay on the ground
-								if pn:find("foot") or pn:find("lowerleg") or pn:find("leftleg") or pn:find("rightleg") then
-									part.CanCollide = true
-								else
-									part.CanCollide = false
-								end
+				if not charMods.noclip then return end
+				if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") and lp.Character:FindFirstChild("Humanoid") then
+					local hrp = lp.Character.HumanoidRootPart
+					local hum = lp.Character.Humanoid
+
+					-- disable collisions on all character parts to walk through all walls
+					for _, part in ipairs(lp.Character:GetDescendants()) do
+						if part:IsA("BasePart") and part.CanCollide then
+							part.CanCollide = false
+						end
+					end
+
+					-- floor check: prevent sinking/falling through floor
+					local ray = workspace:Raycast(hrp.Position, Vector3.new(0, -hum.HipHeight - 2.5, 0))
+					if ray and ray.Instance and not ray.Instance:IsDescendantOf(lp.Character) then
+						local floorY = ray.Position.Y + hum.HipHeight + 2.4
+						if hrp.Position.Y < floorY then
+							hrp.CFrame = CFrame.new(hrp.Position.X, floorY, hrp.Position.Z)
+							if hrp.AssemblyLinearVelocity.Y < 0 then
+								hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
 							end
 						end
-					end)
+					end
 				end
 			end)
 		end
@@ -277,7 +289,7 @@ local function setNoclip(v)
 			noclipConn:Disconnect()
 			noclipConn = nil
 		end
-		-- restore full collision
+		-- restore full collision across all parts
 		pcall(function()
 			if lp.Character then
 				for _, part in ipairs(lp.Character:GetDescendants()) do
@@ -290,7 +302,7 @@ local function setNoclip(v)
 	end
 end
 
--- anti-fling
+-- anti-fling (collides with nothing and absorbs extreme impulse)
 local function setAntiFling(v)
 	charMods.antiFling = v
 	if v then
@@ -324,6 +336,63 @@ local function setAntiFling(v)
 		if antiFlingConn then
 			antiFlingConn:Disconnect()
 			antiFlingConn = nil
+		end
+	end
+end
+
+-- anti-void (spawns safe platform if you fall into void)
+local function setAntiVoid(v)
+	charMods.antiVoid = v
+	if v then
+		if not antiVoidConn then
+			antiVoidConn = rs.Heartbeat:Connect(function()
+				if not charMods.antiVoid then return end
+				pcall(function()
+					if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+						local hrp = lp.Character.HumanoidRootPart
+						local fallenLimit = workspace.FallenPartsDestroyHeight
+						if fallenLimit == 0/0 or fallenLimit < -5000 then
+							fallenLimit = -250
+						end
+						local voidThreshold = fallenLimit + 65
+
+						if hrp.Position.Y < voidThreshold then
+							hrp.AssemblyLinearVelocity = Vector3.zero
+							hrp.AssemblyAngularVelocity = Vector3.zero
+
+							if not voidPlatform or not voidPlatform.Parent then
+								voidPlatform = Instance.new("Part")
+								voidPlatform.Name = "SubstanceVoidPlatform"
+								voidPlatform.Size = Vector3.new(24, 2, 24)
+								voidPlatform.Anchored = true
+								voidPlatform.CanCollide = true
+								voidPlatform.Material = Enum.Material.Neon
+								voidPlatform.Color = Color3.fromRGB(138, 43, 226)
+								voidPlatform.Parent = workspace
+							end
+
+							local safeY = voidThreshold + 15
+							voidPlatform.Position = Vector3.new(hrp.Position.X, safeY - 1, hrp.Position.Z)
+							hrp.CFrame = CFrame.new(hrp.Position.X, safeY + 3.5, hrp.Position.Z)
+
+							Fluent:Notify({
+								Title = "Anti Void",
+								Content = "Saved from void! Platform created.",
+								Duration = 3,
+							})
+						end
+					end
+				end)
+			end)
+		end
+	else
+		if antiVoidConn then
+			antiVoidConn:Disconnect()
+			antiVoidConn = nil
+		end
+		if voidPlatform then
+			pcall(function() voidPlatform:Destroy() end)
+			voidPlatform = nil
 		end
 	end
 end
@@ -417,14 +486,14 @@ playerTab:AddToggle("InfiniteJump", {
 
 playerTab:AddToggle("Noclip", {
 	Title = "Noclip",
-	Description = "Pass through walls without falling through the floor",
+	Description = "Walk through any wall or obstacle with floor protection",
 	Default = false,
 	Callback = function(v)
 		setNoclip(v)
 	end,
 })
 
-playerTab:AddSection("Defense & Trolling")
+playerTab:AddSection("Defense")
 playerTab:AddToggle("AntiFling", {
 	Title = "Anti Fling",
 	Description = "Prevents other players from pushing or flinging you",
@@ -434,6 +503,16 @@ playerTab:AddToggle("AntiFling", {
 	end,
 })
 
+playerTab:AddToggle("AntiVoid", {
+	Title = "Anti Void",
+	Description = "Spawns a platform beneath you if you fall into the void",
+	Default = false,
+	Callback = function(v)
+		setAntiVoid(v)
+	end,
+})
+
+playerTab:AddSection("Trolling")
 local selectedFlingTarget = ""
 local flingDropdown = nil
 
@@ -468,7 +547,7 @@ playerTab:AddButton({
 
 playerTab:AddButton({
 	Title = "Fling Target",
-	Description = "Launches target player across the map",
+	Description = "Launches target player and teleports you back to safety",
 	Callback = function()
 		if selectedFlingTarget == "" then
 			Fluent:Notify({ Title = "Fling", Content = "Select a target first!", Duration = 2 })
@@ -496,7 +575,9 @@ playerTab:AddButton({
 		local thrp = tch:FindFirstChild("HumanoidRootPart")
 		if not hrp or not thrp then return end
 
-		local oldPos = hrp.CFrame
+		-- Save position before flinging
+		local savedPos = hrp.CFrame
+
 		local bav = Instance.new("BodyAngularVelocity")
 		bav.AngularVelocity = Vector3.new(99999, 99999, 99999)
 		bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
@@ -505,15 +586,21 @@ playerTab:AddButton({
 
 		task.spawn(function()
 			local t0 = tick()
-			while tick() - t0 < 1.8 and thrp.Parent do
+			while tick() - t0 < 1.5 and thrp.Parent do
 				hrp.CFrame = thrp.CFrame
 				task.wait()
 			end
 			bav:Destroy()
-			hrp.AssemblyLinearVelocity = Vector3.zero
-			hrp.AssemblyAngularVelocity = Vector3.zero
-			task.wait(0.1)
-			hrp.CFrame = oldPos
+
+			-- Multi-frame momentum kill and return to saved position
+			for _ = 1, 8 do
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
+				hrp.CFrame = savedPos
+				task.wait(0.03)
+			end
+
+			Fluent:Notify({ Title = "Fling", Content = "Fling finished! Teleported back to your spot.", Duration = 2 })
 		end)
 	end,
 })
@@ -577,6 +664,7 @@ settingsTab:AddButton({
 		end
 		setNoclip(false)
 		setAntiFling(false)
+		setAntiVoid(false)
 		if infJumpConn then infJumpConn:Disconnect() end
 		Window:Destroy()
 	end,

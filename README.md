@@ -42,7 +42,8 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/LilacTheNobody/Substa
 - **Safe Noclip** — Walk through walls and doors without falling through the floor
 - **Persistent Speed & Jump** — Never gets cancelled by tool equip or attack animations
 - **Anti Fling** — Immune to physics pushes and player collision flinging
-- **Fling Player** — Select any target player and launch them with high-torque physics
+- **Anti Void** — Spawns an anchored platform under your feet if knocked into the void
+- **Fling Player** — Select any target player, fling them, and automatically teleport back to your spot
 - **Infinite Jump**
 - **Server Hop, Rejoin & Copy Place ID**
 - **Anti-AFK** — Prevents idle disconnects

@@ -429,8 +429,12 @@ local function killAll()
 		end
 	end
 
-	task.wait(0.1)
-	hrp.CFrame = origPos
+	for _ = 1, 6 do
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+		hrp.CFrame = origPos
+		task.wait(0.03)
+	end
 	isKillingAll = false
 end
 
