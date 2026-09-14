@@ -394,10 +394,48 @@ local function updateTrapESP()
 	end
 end
 
--- combat
+-- -- combat helpers
+local function findShootRemotes(tool)
+	local remotes = {}
+	if tool then
+		for _, desc in ipairs(tool:GetDescendants()) do
+			if desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent") then
+				local n = desc.Name:lower()
+				if n:find("shoot") or n:find("gun") or n:find("fire") then
+					table.insert(remotes, desc)
+				end
+			end
+		end
+	end
+	local rep = game:GetService("ReplicatedStorage")
+	if rep then
+		for _, name in ipairs({"ShootGun", "Shoot", "GunServer"}) do
+			local r = rep:FindFirstChild(name, true)
+			if r and (r:IsA("RemoteFunction") or r:IsA("RemoteEvent")) then
+				table.insert(remotes, r)
+			end
+		end
+		local remotesFolder = rep:FindFirstChild("Remotes")
+		if remotesFolder then
+			for _, desc in ipairs(remotesFolder:GetChildren()) do
+				if desc:IsA("RemoteFunction") or desc:IsA("RemoteEvent") then
+					local n = desc.Name:lower()
+					if n:find("shoot") or n:find("gun") then
+						table.insert(remotes, desc)
+					end
+				end
+			end
+		end
+	end
+	return remotes
+end
+
 local function shootAt(pos)
 	local ch = lp.Character
 	if not ch then return false end
+	local hum = ch:FindFirstChildOfClass("Humanoid")
+	local hrp = ch:FindFirstChild("HumanoidRootPart")
+	if not hum or not hrp then return false end
 
 	local gun = ch:FindFirstChild("Gun") or ch:FindFirstChild("Revolver")
 	if not gun then
@@ -405,9 +443,8 @@ local function shootAt(pos)
 		if bp then
 			local bg = bp:FindFirstChild("Gun") or bp:FindFirstChild("Revolver")
 			if bg then
-				local hum = ch:FindFirstChild("Humanoid")
-				if hum then hum:EquipTool(bg) end
-				task.wait(0.08)
+				hum:EquipTool(bg)
+				task.wait(0.1)
 				gun = ch:FindFirstChild("Gun") or ch:FindFirstChild("Revolver")
 			end
 		end
@@ -415,28 +452,52 @@ local function shootAt(pos)
 
 	if not gun then return false end
 
-	local ks = gun:FindFirstChild("KnifeServer")
-	if ks then
-		local sg = ks:FindFirstChild("ShootGun")
-		if sg then
-			pcall(function() sg:InvokeServer(1, pos, "AH") end)
-			return true
+	-- Face character and aim camera directly at target position
+	pcall(function()
+		hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(pos.X, hrp.Position.Y, pos.Z))
+		local cam = workspace.CurrentCamera
+		if cam then
+			cam.CFrame = CFrame.new(cam.CFrame.Position, pos)
 		end
-	end
+	end)
 
-	local shootRemote = gun:FindFirstChild("Shoot") or gun:FindFirstChild("ShootGun")
-	if shootRemote then
+	local shotFired = false
+
+	-- Method 1: Direct remote invocation with all standard MM2 signatures
+	local remotes = findShootRemotes(gun)
+	for _, r in ipairs(remotes) do
 		pcall(function()
-			if shootRemote:IsA("RemoteFunction") then
-				shootRemote:InvokeServer(pos)
-			else
-				shootRemote:FireServer(pos)
+			if r:IsA("RemoteFunction") then
+				pcall(function() r:InvokeServer(1, pos, "AH") end)
+				pcall(function() r:InvokeServer(pos) end)
+				pcall(function() r:InvokeServer(1, pos) end)
+				shotFired = true
+			elseif r:IsA("RemoteEvent") then
+				pcall(function() r:FireServer(1, pos, "AH") end)
+				pcall(function() r:FireServer(pos) end)
+				pcall(function() r:FireServer(1, pos) end)
+				shotFired = true
 			end
 		end)
-		return true
 	end
 
-	return false
+	-- Method 2: Tool Activation (triggers the gun's own LocalScript click handler)
+	pcall(function()
+		gun:Activate()
+		shotFired = true
+	end)
+
+	-- Method 3: Virtual input mouse click
+	pcall(function()
+		if typeof(mouse1click) == "function" then
+			mouse1click()
+		end
+		vu:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+		task.wait(0.04)
+		vu:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+	end)
+
+	return shotFired
 end
 
 -- check if a player is in the lobby (waiting / eliminated / not on active map)
