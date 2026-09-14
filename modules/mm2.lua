@@ -450,8 +450,57 @@ local function shootMurderer()
 	return shootAt(targetPos)
 end
 
--- kill all (brings alive targets directly in front of knife without teleporting local player)
-local isKillingAll = false
+-- check if a player is in the lobby (waiting / eliminated / not on active map)
+local function isPlayerInLobby(p)
+	local ch = p.Character
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not hrp then return true end
+
+	-- 1. Check if workspace.Lobby exists and player is inside or near it
+	local lobby = workspace:FindFirstChild("Lobby")
+	if lobby then
+		local spawns = lobby:FindFirstChild("Spawns")
+		if spawns then
+			local spawnPos = spawns:GetPivot().Position
+			if (hrp.Position - spawnPos).Magnitude < 175 then
+				return true
+			end
+		end
+		local ok, lobbyCf, lobbySize = pcall(function() return lobby:GetBoundingBox() end)
+		if ok and lobbyCf and lobbySize then
+			local relPos = lobbyCf:PointToObjectSpace(hrp.Position)
+			local halfSize = lobbySize / 2 + Vector3.new(30, 30, 30)
+			if math.abs(relPos.X) <= halfSize.X and math.abs(relPos.Y) <= halfSize.Y and math.abs(relPos.Z) <= halfSize.Z then
+				return true
+			end
+		end
+	end
+
+	-- 2. Check distance relative to local player (Murderer is inside the map)
+	local myHrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+	if myHrp then
+		local dist = (hrp.Position - myHrp.Position).Magnitude
+		-- Active MM2 maps are ~150-250 studs across; lobby is 500-2500+ studs away
+		if dist > 550 then
+			return true
+		end
+	end
+
+	-- 3. Check active map container (workspace.Normal) if present
+	local activeMap = workspace:FindFirstChild("Normal")
+	if activeMap then
+		local ok, mapCf, mapSize = pcall(function() return activeMap:GetBoundingBox() end)
+		if ok and mapCf and mapSize then
+			local relPos = mapCf:PointToObjectSpace(hrp.Position)
+			local halfSize = mapSize / 2 + Vector3.new(45, 45, 45)
+			if math.abs(relPos.X) > halfSize.X or math.abs(relPos.Y) > halfSize.Y or math.abs(relPos.Z) > halfSize.Z then
+				return true
+			end
+		end
+	end
+
+	return false
+end
 
 local function isAliveTarget(p)
 	if not p or not p.Parent or p == lp then return false end
@@ -466,6 +515,12 @@ local function isAliveTarget(p)
 	if ch:FindFirstChild("Dead") then return false end
 	if ch:FindFirstChildOfClass("ForceField") then return false end
 	if ch:FindFirstChild("Ragdoll") or ch:FindFirstChild("Ragdolled") then return false end
+
+	-- Exclude players in the lobby (not on the map)
+	if isPlayerInLobby(p) then
+		return false
+	end
+
 	return true
 end
 
@@ -500,36 +555,34 @@ local function killAll()
 	local knifeHandle = knife:FindFirstChild("Handle")
 
 	for _, p in ipairs(targets) do
-		if not isAliveTarget(p) then
-			continue
-		end
+		if isAliveTarget(p) then
+			local tch = p.Character
+			local thrp = tch and tch:FindFirstChild("HumanoidRootPart")
+			if thrp and hrp and hrp.Parent then
+				-- Bring target directly in front of the local player (local player never teleports away)
+				local strikeCf = hrp.CFrame * CFrame.new(0, 0, -2.4)
+				pcall(function()
+					thrp.CFrame = strikeCf
+					thrp.AssemblyLinearVelocity = Vector3.zero
+					thrp.AssemblyAngularVelocity = Vector3.zero
+					if tch:FindFirstChild("UpperTorso") then
+						tch.UpperTorso.CFrame = strikeCf
+					elseif tch:FindFirstChild("Torso") then
+						tch.Torso.CFrame = strikeCf
+					end
+				end)
 
-		local tch = p.Character
-		local thrp = tch and tch:FindFirstChild("HumanoidRootPart")
-		if thrp and hrp and hrp.Parent then
-			-- Bring target directly in front of the local player (local player never teleports away)
-			local strikeCf = hrp.CFrame * CFrame.new(0, 0, -2.4)
-			pcall(function()
-				thrp.CFrame = strikeCf
-				thrp.AssemblyLinearVelocity = Vector3.zero
-				thrp.AssemblyAngularVelocity = Vector3.zero
-				if tch:FindFirstChild("UpperTorso") then
-					tch.UpperTorso.CFrame = strikeCf
-				elseif tch:FindFirstChild("Torso") then
-					tch.Torso.CFrame = strikeCf
-				end
-			end)
+				-- Slash knife
+				pcall(function()
+					knife:Activate()
+					if knifeHandle and typeof(firetouchinterest) == "function" then
+						firetouchinterest(thrp, knifeHandle, 0)
+						firetouchinterest(thrp, knifeHandle, 1)
+					end
+				end)
 
-			-- Slash knife
-			pcall(function()
-				knife:Activate()
-				if knifeHandle and typeof(firetouchinterest) == "function" then
-					firetouchinterest(thrp, knifeHandle, 0)
-					firetouchinterest(thrp, knifeHandle, 1)
-				end
-			end)
-
-			task.wait(0.08)
+				task.wait(0.08)
+			end
 		end
 	end
 
@@ -1150,6 +1203,57 @@ module.Elements = {
 		end,
 	},
 
+	{ Type = "Section", Name = "Visuals & Camera" },
+
+	{
+		Type = "Toggle",
+		Name = "Fullbright",
+		Description = "Illuminates dark maps completely for crystal-clear vision",
+		Default = false,
+		Callback = function(v)
+			setFullbright(v)
+		end,
+	},
+
+	{
+		Type = "Button",
+		Name = "Spectate Murderer",
+		Description = "Follows the Murderer with camera",
+		Callback = function()
+			local m = getMurderer()
+			if m then
+				spectateTarget(m)
+				apiNotify({ Title = "Spectate", Content = "Spectating " .. m.DisplayName, Duration = 2 })
+			else
+				apiNotify({ Title = "Spectate", Content = "Murderer not found or not in map", Duration = 2 })
+			end
+		end,
+	},
+
+	{
+		Type = "Button",
+		Name = "Spectate Sheriff",
+		Description = "Follows the Sheriff with camera",
+		Callback = function()
+			local s = getSheriff()
+			if s then
+				spectateTarget(s)
+				apiNotify({ Title = "Spectate", Content = "Spectating " .. s.DisplayName, Duration = 2 })
+			else
+				apiNotify({ Title = "Spectate", Content = "Sheriff not found or gun dropped", Duration = 2 })
+			end
+		end,
+	},
+
+	{
+		Type = "Button",
+		Name = "Reset Camera (Unspectate)",
+		Description = "Returns camera back to your own character",
+		Callback = function()
+			spectateTarget(lp)
+		end,
+	},
+
 	{ Type = "Section", Name = "Movement" },
 
 	{
@@ -1159,7 +1263,11 @@ module.Elements = {
 		Default = false,
 		Callback = function(v)
 			cfg.speedEnabled = v
-			applyLocalSpeed()
+			if v then
+				applyLocalSpeed()
+			else
+				restoreLocalDefaultMovement()
+			end
 		end,
 	},
 
@@ -1172,7 +1280,9 @@ module.Elements = {
 		Rounding = 1,
 		Callback = function(v)
 			cfg.speed = v
-			applyLocalSpeed()
+			if cfg.speedEnabled then
+				applyLocalSpeed()
+			end
 		end,
 	},
 
@@ -1183,7 +1293,11 @@ module.Elements = {
 		Default = false,
 		Callback = function(v)
 			cfg.jumpEnabled = v
-			applyLocalSpeed()
+			if v then
+				applyLocalSpeed()
+			else
+				restoreLocalDefaultMovement()
+			end
 		end,
 	},
 
@@ -1196,7 +1310,9 @@ module.Elements = {
 		Rounding = 1,
 		Callback = function(v)
 			cfg.jumpPow = v
-			applyLocalSpeed()
+			if cfg.jumpEnabled then
+				applyLocalSpeed()
+			end
 		end,
 	},
 
@@ -1209,7 +1325,7 @@ module.Elements = {
 			cfg.jumpEnabled = false
 			cfg.speed = 16
 			cfg.jumpPow = 50
-			applyLocalSpeed()
+			restoreLocalDefaultMovement()
 			apiNotify({ Title = "Movement", Content = "Restored default speed and jump", Duration = 2 })
 		end,
 	},
@@ -1222,7 +1338,15 @@ module.Init = function(api)
 	table.insert(conns, lp.CharacterAdded:Connect(function(newChar)
 		hookLocalHumanoid(newChar)
 	end))
-	table.insert(conns, rs.Heartbeat:Connect(applyLocalSpeed))
+
+	-- only bind local heartbeat if hub is not already managing global movement
+	if not _G.SubstanceCharMods then
+		table.insert(conns, rs.Heartbeat:Connect(function()
+			if cfg.speedEnabled or cfg.jumpEnabled then
+				applyLocalSpeed()
+			end
+		end))
+	end
 
 	-- round reset & player respawn hooks
 	local function hookPlayer(p)
@@ -1278,6 +1402,8 @@ module.Init = function(api)
 end
 
 -- bulletproof background loop (never dies across rounds)
+local lastAutoKill = 0
+
 module.BackgroundTask = function(api)
 	cachedApi = api
 	while api.Running do
@@ -1318,9 +1444,10 @@ module.BackgroundTask = function(api)
 				end)
 			end
 
-			-- auto kill all
-			if cfg.autoKill and getRole(lp) == "Murderer" then
-				pcall(killAll)
+			-- auto kill all (murderer only, throttled to prevent spamming)
+			if cfg.autoKill and getRole(lp) == "Murderer" and (tick() - lastAutoKill > 1.0) then
+				lastAutoKill = tick()
+				task.spawn(killAll)
 			end
 
 			-- knife aura
@@ -1333,7 +1460,7 @@ module.BackgroundTask = function(api)
 							for _, p in ipairs(plrs:GetPlayers()) do
 								if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 									local tHum = p.Character:FindFirstChild("Humanoid")
-									if tHum and tHum.Health > 0 then
+									if tHum and tHum.Health > 0 and not isPlayerInLobby(p) then
 										local dist = (ch.HumanoidRootPart.Position - p.Character.HumanoidRootPart.Position).Magnitude
 										if dist <= cfg.auraRange then
 											if knife.Parent == lp.Backpack then
@@ -1367,9 +1494,6 @@ module.BackgroundTask = function(api)
 					end
 				end)
 			end
-
-			-- persist custom walkspeed & jump power
-			applyLocalSpeed()
 		end)
 
 		task.wait(0.18)
@@ -1382,18 +1506,15 @@ module.Cleanup = function()
 	clearGunESP()
 	clearTrapESP()
 	cachedRoles = {}
+	setFullbright(false)
+	spectateTarget(lp)
 
 	for _, c in ipairs(conns) do
 		pcall(function() c:Disconnect() end)
 	end
 	conns = {}
 
-	pcall(function()
-		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-			lp.Character.Humanoid.WalkSpeed = 16
-			lp.Character.Humanoid.JumpPower = 50
-		end
-	end)
+	restoreLocalDefaultMovement()
 end
 
 return module
