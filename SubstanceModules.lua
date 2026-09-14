@@ -1,5 +1,5 @@
--- Substance Module System
--- handles loading and building tabs from game modules
+-- module system
+-- substance
 
 local SubstanceModules = {}
 SubstanceModules.__index = SubstanceModules
@@ -7,7 +7,7 @@ SubstanceModules.Loaded = {}
 SubstanceModules.BackgroundTasks = {}
 
 function SubstanceModules:Register(mod)
-	if not mod or not mod.Name then return end
+	if not mod or not mod.Name then return nil end
 
 	local entry = {
 		Module = mod,
@@ -36,8 +36,10 @@ function SubstanceModules:LoadFromURL(url)
 end
 
 function SubstanceModules:LoadFromFile(path)
-	local ok, src = pcall(function() return readfile(path) end)
-	if not ok or not src then return nil end
+	local ok, src = pcall(function()
+		return readfile(path)
+	end)
+	if not ok or not src or src == "" then return nil end
 
 	local loader, err = loadstring(src)
 	if not loader then return nil end
@@ -48,90 +50,123 @@ function SubstanceModules:LoadFromFile(path)
 	return self:Register(mod)
 end
 
--- takes a module entry + window and builds a tab with all the elements
-function SubstanceModules:BuildTab(entry, Window, SubstanceUI)
+function SubstanceModules:BuildTab(entry, Window, Fluent)
 	local mod = entry.Module
 
-	local tab = Window:CreateTab({
-		Name = mod.Name or "Module",
-		Icon = mod.Icon,
+	local tab = Window:AddTab({
+		Title = mod.Name or "Module",
+		Icon = mod.Icon or "box",
 	})
 	entry.Tab = tab
 
 	local moduleApi = {
 		Running = true,
-		Notify = function(config) SubstanceUI:Notify(config) end,
+		Notify = function(cfg)
+			if Fluent and Fluent.Notify then
+				Fluent:Notify({
+					Title = cfg.Title or "Substance",
+					Content = cfg.Description or cfg.Content or cfg.Text or "",
+					Duration = cfg.Duration or 3,
+				})
+			end
+		end,
 		GetPlayers = function() return game:GetService("Players"):GetPlayers() end,
 		GetLocalPlayer = function() return game:GetService("Players").LocalPlayer end,
 		Tab = tab,
 		Window = Window,
+		Fluent = Fluent,
 	}
 	entry.Api = moduleApi
 
 	if mod.Elements then
 		for _, el in ipairs(mod.Elements) do
+			local id = el.Id or (el.Name and el.Name:gsub("%s+", "") .. tostring(math.random(100, 999))) or ("Item" .. tostring(math.random(100, 999)))
+
 			if el.Type == "Section" then
-				tab:CreateSection({ Name = el.Name })
-			elseif el.Type == "Button" then
-				tab:CreateButton({ Name = el.Name, Callback = el.Callback })
+				tab:AddSection(el.Name)
 			elseif el.Type == "Toggle" then
-				el._ref = tab:CreateToggle({ Name = el.Name, Default = el.Default, Callback = el.Callback })
-			elseif el.Type == "Slider" then
-				el._ref = tab:CreateSlider({ Name = el.Name, Min = el.Min, Max = el.Max, Default = el.Default, Callback = el.Callback })
-			elseif el.Type == "Label" then
-				el._ref = tab:CreateLabel({ Text = el.Text })
-			elseif el.Type == "Textbox" then
-				tab:CreateTextbox({ Name = el.Name, Placeholder = el.Placeholder, Default = el.Default, Callback = el.Callback })
+				local t = tab:AddToggle(id, {
+					Title = el.Name,
+					Description = el.Description or "",
+					Default = el.Default or false,
+					Callback = el.Callback or function() end,
+				})
+				el._ref = t
 			elseif el.Type == "Dropdown" then
-				el._ref = tab:CreateDropdown({ Name = el.Name, Options = el.Options, Default = el.Default, Callback = el.Callback })
-			elseif el.Type == "Separator" then
-				tab:CreateSeparator()
+				local d = tab:AddDropdown(id, {
+					Title = el.Name,
+					Description = el.Description or "",
+					Values = el.Values or el.Options or {},
+					Multi = el.Multi or false,
+					Default = el.Default,
+					Callback = el.Callback or function() end,
+				})
+				el._ref = d
+			elseif el.Type == "Slider" then
+				local s = tab:AddSlider(id, {
+					Title = el.Name,
+					Description = el.Description or "",
+					Min = el.Min or 0,
+					Max = el.Max or 100,
+					Default = el.Default or el.Min or 0,
+					Rounding = el.Rounding or 1,
+					Callback = el.Callback or function() end,
+				})
+				el._ref = s
+			elseif el.Type == "Button" then
+				local b = tab:AddButton({
+					Title = el.Name,
+					Description = el.Description or "",
+					Callback = el.Callback or function() end,
+				})
+				el._ref = b
+			elseif el.Type == "Paragraph" or el.Type == "Label" then
+				tab:AddParagraph({
+					Title = el.Name or el.Title or "Info",
+					Content = el.Content or el.Text or "",
+				})
+			elseif el.Type == "Input" or el.Type == "Textbox" then
+				tab:AddInput(id, {
+					Title = el.Name,
+					Default = el.Default or "",
+					Placeholder = el.Placeholder or "",
+					Numeric = el.Numeric or false,
+					Finished = el.Finished or false,
+					Callback = el.Callback or function() end,
+				})
 			end
 		end
 	end
 
 	if mod.Init then
-		task.spawn(function() pcall(mod.Init, moduleApi) end)
+		task.spawn(function()
+			pcall(mod.Init, moduleApi)
+		end)
 	end
 
 	if mod.BackgroundTask then
-		local t = task.spawn(function() pcall(mod.BackgroundTask, moduleApi) end)
+		local t = task.spawn(function()
+			pcall(mod.BackgroundTask, moduleApi)
+		end)
 		table.insert(self.BackgroundTasks, { Thread = t, Api = moduleApi, Module = mod })
 	end
 
 	return tab
 end
 
-function SubstanceModules:GetForGame(placeId)
-	local result = {}
-	for _, entry in ipairs(self.Loaded) do
-		if entry.Module.GameId == nil or entry.Module.GameId == placeId then
-			table.insert(result, entry)
-		end
-	end
-	return result
-end
-
 function SubstanceModules:UnloadAll()
-	for _, bg in ipairs(self.BackgroundTasks) do bg.Api.Running = false end
+	for _, bg in ipairs(self.BackgroundTasks) do
+		if bg.Api then bg.Api.Running = false end
+	end
 	for _, entry in ipairs(self.Loaded) do
-		if entry.Module.Cleanup then pcall(entry.Module.Cleanup) end
+		if entry.Api then entry.Api.Running = false end
+		if entry.Module.Cleanup then
+			pcall(entry.Module.Cleanup)
+		end
 		entry.Running = false
 	end
 	self.Loaded = {}
 	self.BackgroundTasks = {}
-end
-
-function SubstanceModules:Unload(name)
-	for i, entry in ipairs(self.Loaded) do
-		if entry.Module.Name == name then
-			if entry.Api then entry.Api.Running = false end
-			if entry.Module.Cleanup then pcall(entry.Module.Cleanup) end
-			table.remove(self.Loaded, i)
-			return true
-		end
-	end
-	return false
 end
 
 return SubstanceModules
