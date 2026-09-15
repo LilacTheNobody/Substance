@@ -502,61 +502,48 @@ local function setAntiVoid(v)
 end
 
 -- fly system (wasd + space/shift + camera orientation)
+local flyConn = nil
 local function setFly(v)
 	charMods.flying = v
+	if flyConn then
+		flyConn:Disconnect()
+		flyConn = nil
+	end
+
 	if v then
 		local ch = lp.Character
 		if not ch then return end
 		local hrp = ch:FindFirstChild("HumanoidRootPart")
-		local hum = ch:FindFirstChild("Humanoid")
+		local hum = ch:FindFirstChildOfClass("Humanoid")
 		if not hrp or not hum then return end
 
-		if flyBg then flyBg:Destroy() end
-		if flyBv then flyBv:Destroy() end
+		flyConn = rs.RenderStepped:Connect(function(dt)
+			if not charMods.flying then return end
+			local character = lp.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if not root or not humanoid or humanoid.Health <= 0 then return end
 
-		flyBg = Instance.new("BodyGyro")
-		flyBg.P = 9e4
-		flyBg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-		flyBg.cframe = hrp.CFrame
-		flyBg.Parent = hrp
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
 
-		flyBv = Instance.new("BodyVelocity")
-		flyBv.velocity = Vector3.new(0, 0.1, 0)
-		flyBv.maxForce = Vector3.new(9e9, 9e9, 9e9)
-		flyBv.Parent = hrp
+			local cam = workspace.CurrentCamera
+			local move = Vector3.zero
 
-		task.spawn(function()
-			while charMods.flying and lp.Character and hrp.Parent and hum.Parent do
-				hum.PlatformStand = true
-				local cam = workspace.CurrentCamera
-				local move = Vector3.zero
+			if uis:IsKeyDown(Enum.KeyCode.W) then move = move + cam.CFrame.LookVector end
+			if uis:IsKeyDown(Enum.KeyCode.S) then move = move - cam.CFrame.LookVector end
+			if uis:IsKeyDown(Enum.KeyCode.A) then move = move - cam.CFrame.RightVector end
+			if uis:IsKeyDown(Enum.KeyCode.D) then move = move + cam.CFrame.RightVector end
+			if uis:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
+			if uis:IsKeyDown(Enum.KeyCode.LeftShift) or uis:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
 
-				if uis:IsKeyDown(Enum.KeyCode.W) then move = move + cam.CFrame.LookVector end
-				if uis:IsKeyDown(Enum.KeyCode.S) then move = move - cam.CFrame.LookVector end
-				if uis:IsKeyDown(Enum.KeyCode.A) then move = move - cam.CFrame.RightVector end
-				if uis:IsKeyDown(Enum.KeyCode.D) then move = move + cam.CFrame.RightVector end
-				if uis:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-				if uis:IsKeyDown(Enum.KeyCode.LeftShift) then move = move - Vector3.new(0, 1, 0) end
-
-				if move.Magnitude > 0 then
-					flyBv.velocity = move.Unit * charMods.flySpeed
-				else
-					flyBv.velocity = Vector3.zero
-				end
-				flyBg.cframe = cam.CFrame
-				rs.Heartbeat:Wait()
-			end
-			if flyBg then flyBg:Destroy(); flyBg = nil end
-			if flyBv then flyBv:Destroy(); flyBv = nil end
-			if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-				lp.Character.Humanoid.PlatformStand = false
+			if move.Magnitude > 0 then
+				root.CFrame = root.CFrame + (move.Unit * (charMods.flySpeed * dt))
 			end
 		end)
 	else
-		if flyBg then flyBg:Destroy(); flyBg = nil end
-		if flyBv then flyBv:Destroy(); flyBv = nil end
-		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-			lp.Character.Humanoid.PlatformStand = false
+		if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+			lp.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
 		end
 	end
 end

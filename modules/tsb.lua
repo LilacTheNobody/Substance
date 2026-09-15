@@ -80,39 +80,104 @@ local colors = {
 	HealthRed = Color3.fromRGB(255, 45, 45),
 }
 
--- moveset & character database
+-- moveset & character database (TSB Official Character Titles & Moves)
 local characterMovesets = {
-	["The Strongest Hero (Saitama)"] = {
-		Keywords = { "normal punch", "consecutive normal", "shove", "uppercut", "serious punch", "omnidirectional", "table flip", "serious headbutt" },
+	["Saitama"] = {
+		DisplayName = "The Strongest Hero",
+		ShortName = "Saitama",
+		Color = Color3.fromRGB(255, 205, 50),
+		Keywords = {
+			"the strongest hero", "saitama", "normal punch", "consecutive normal",
+			"consecutive punches", "shove", "uppercut", "serious punch",
+			"omnidirectional", "table flip", "serious headbutt", "bald", "hero"
+		},
 		AwakenedMoves = { "serious punch", "omnidirectional", "table flip", "serious headbutt" },
 	},
-	["The Hero Hunter (Garou)"] = {
-		Keywords = { "flowing water", "lethal whirlwind", "hunter's grasp", "prey's peril", "final hunt" },
-		AwakenedMoves = { "final hunt" },
+	["Garou"] = {
+		DisplayName = "Hero Hunter",
+		ShortName = "Garou",
+		Color = Color3.fromRGB(75, 210, 255),
+		Keywords = {
+			"hero hunter", "garou", "flowing water", "lethal whirlwind",
+			"hunter's grasp", "prey's peril", "final hunt", "crushed rock",
+			"hunter", "water stream"
+		},
+		AwakenedMoves = { "final hunt", "crushed rock" },
 	},
-	["Destructive Cyborg (Genos)"] = {
-		Keywords = { "machine gun", "ignition burst", "blitz shot", "jet dive", "incinerate", "maximum output" },
-		AwakenedMoves = { "incinerate", "maximum output" },
+	["Genos"] = {
+		DisplayName = "Destructive Cyborg",
+		ShortName = "Genos",
+		Color = Color3.fromRGB(255, 140, 40),
+		Keywords = {
+			"destructive cyborg", "genos", "machine gun", "ignition burst",
+			"blitz shot", "jet dive", "incinerate", "maximum output",
+			"thunder kick", "cyborg", "core energy"
+		},
+		AwakenedMoves = { "incinerate", "maximum output", "thunder kick" },
 	},
-	["Speed o' Sound Sonic"] = {
-		Keywords = { "flash strike", "scatter", "whirlwind kick", "explosive shuriken", "carnage", "twin blades" },
+	["Sonic"] = {
+		DisplayName = "Deadly Ninja",
+		ShortName = "Sonic",
+		Color = Color3.fromRGB(185, 110, 255),
+		Keywords = {
+			"deadly ninja", "speed-o'-sound", "sonic", "flash strike", "scatter",
+			"whirlwind kick", "explosive shuriken", "carnage", "twin blades",
+			"ninja", "shadow clone"
+		},
 		AwakenedMoves = { "carnage", "twin blades" },
 	},
-	["Brutal Demon (Metal Bat)"] = {
-		Keywords = { "grand slam", "foul ball", "home run", "beatdown", "death blow", "brutal beatdown" },
+	["Metal Bat"] = {
+		DisplayName = "Brutal Demon",
+		ShortName = "Metal Bat",
+		Color = Color3.fromRGB(255, 75, 75),
+		Keywords = {
+			"brutal demon", "metal bat", "grand slam", "foul ball", "home run",
+			"beatdown", "death blow", "brutal beatdown", "bat", "frenzy",
+			"adrenaline"
+		},
 		AwakenedMoves = { "death blow", "brutal beatdown" },
 	},
-	["Blade Master (Atomic Samurai)"] = {
-		Keywords = { "quick slice", "atmos cleave", "pinpoint cut", "split second counter", "atomic slash", "dual cleave" },
-		AwakenedMoves = { "atomic slash", "dual cleave" },
+	["Atomic Samurai"] = {
+		DisplayName = "Blade Master",
+		ShortName = "Atomic",
+		Color = Color3.fromRGB(120, 185, 255),
+		Keywords = {
+			"blade master", "atomic samurai", "atomic", "quick slice", "atmos cleave",
+			"pinpoint cut", "split second counter", "atomic slash", "dual cleave",
+			"sunrise", "samurai", "blade"
+		},
+		AwakenedMoves = { "atomic slash", "dual cleave", "sunrise" },
 	},
-	["Wild Psychic (Tatsumaki)"] = {
-		Keywords = { "crushing pull", "telekinetic toss", "stone coffin", "collapsing horizon", "crushing mass" },
+	["Tatsumaki"] = {
+		DisplayName = "Wild Psychic",
+		ShortName = "Tatsumaki",
+		Color = Color3.fromRGB(65, 240, 145),
+		Keywords = {
+			"wild psychic", "tatsumaki", "crushing pull", "telekinetic toss",
+			"stone coffin", "collapsing horizon", "crushing mass", "psychic",
+			"tornado", "telekinesis"
+		},
 		AwakenedMoves = { "collapsing horizon", "crushing mass" },
 	},
-	["Sorcerer (Gojo / Sukuna)"] = {
-		Keywords = { "dismantle", "cleave", "flame arrow", "malevolent shrine", "reversal red", "lapse blue", "hollow purple" },
-		AwakenedMoves = { "malevolent shrine", "hollow purple" },
+	["Suiryu"] = {
+		DisplayName = "Martial Artist",
+		ShortName = "Suiryu",
+		Color = Color3.fromRGB(255, 165, 60),
+		Keywords = {
+			"martial artist", "suiryu", "headbutt", "tiger fang", "vanishing kick",
+			"rising dragon", "void quake", "dragon bite", "void knuckle"
+		},
+		AwakenedMoves = { "void quake", "dragon bite", "void knuckle" },
+	},
+	["KJ"] = {
+		DisplayName = "KJ (The Prodigy)",
+		ShortName = "KJ",
+		Color = Color3.fromRGB(255, 85, 225),
+		Keywords = {
+			"kj", "ravage", "stoic bomb", "collateral ruin", "20-20-20",
+			"dropkick", "five seasons", "unlimited flex", "warmup"
+		},
+		AwakenedMoves = { "20-20-20", "five seasons", "unlimited flex" },
 	},
 }
 
@@ -153,105 +218,184 @@ local storedRootJoint = nil
 local storedRootJointC0 = nil
 local storedRootJointC1 = nil
 
--- keyboard & mouse input simulation helpers
+-- keyboard & mouse input simulation helpers (multi-executor compatibility)
 local function pressKey(keyCode, isDown)
-	pcall(function()
-		if vim then
-			vim:SendKeyEvent(isDown, keyCode, false, game)
-		elseif keypress and keyrelease then
+	local pressed = false
+	if keypress and keyrelease then
+		local ok = pcall(function()
 			if isDown then keypress(keyCode.Value) else keyrelease(keyCode.Value) end
-		end
-	end)
+		end)
+		if ok then pressed = true end
+	end
+	if not pressed and vu then
+		local ok = pcall(function()
+			local kn = keyCode.Name:lower()
+			if isDown then
+				vu:SetKeyDown(kn)
+			else
+				vu:SetKeyUp(kn)
+			end
+		end)
+		if ok then pressed = true end
+	end
+	if not pressed and vim then
+		pcall(function()
+			vim:SendKeyEvent(isDown, keyCode, false, game)
+		end)
+	end
 end
 
 local function triggerM1Click()
-	pcall(function()
-		if vim then
-			vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-			task.wait(0.04)
-			vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-		elseif mouse1click then
-			mouse1click()
-		elseif vu then
+	local clicked = false
+	if mouse1click then
+		local ok = pcall(function() mouse1click() end)
+		if ok then clicked = true end
+	end
+	if not clicked and vu then
+		local ok = pcall(function()
 			vu:CaptureController()
 			vu:ClickButton1(Vector2.zero)
-		end
-	end)
+		end)
+		if ok then clicked = true end
+	end
+	if not clicked and vim then
+		pcall(function()
+			vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+			task.wait(0.02)
+			vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+		end)
+	end
 end
 
 -- scan player character & backpack for moveset identification
 local function detectPlayerMoveset(p)
-	if not p or not p.Parent then return "Unknown", false end
+	if not p or not p.Parent then return "Fighter", false, colors.NormalEnemy end
 
-	local toolNames = {}
 	local ch = p.Character
-	if ch then
-		for _, item in ipairs(ch:GetChildren()) do
-			if item:IsA("Tool") or item:IsA("Folder") or item:IsA("StringValue") then
-				table.insert(toolNames, item.Name:lower())
-			end
+	if not ch then return "Fighter", false, colors.NormalEnemy end
+
+	local searchStrings = {}
+
+	-- 1. Check all attributes on Character and Player
+	pcall(function()
+		for k, v in pairs(ch:GetAttributes()) do
+			table.insert(searchStrings, tostring(k):lower())
+			table.insert(searchStrings, tostring(v):lower())
+		end
+		for k, v in pairs(p:GetAttributes()) do
+			table.insert(searchStrings, tostring(k):lower())
+			table.insert(searchStrings, tostring(v):lower())
+		end
+	end)
+
+	-- 2. Check child instances, values and tools in Character
+	for _, item in ipairs(ch:GetChildren()) do
+		local iname = item.Name:lower()
+		table.insert(searchStrings, iname)
+		if item:IsA("StringValue") and item.Value ~= "" then
+			table.insert(searchStrings, item.Value:lower())
 		end
 	end
 
-	local bp = p:FindFirstChild("Backpack")
-	if bp then
-		for _, item in ipairs(bp:GetChildren()) do
-			if item:IsA("Tool") then
-				table.insert(toolNames, item.Name:lower())
+	-- 3. Check character props, weapons and animations
+	pcall(function()
+		for _, desc in ipairs(ch:GetDescendants()) do
+			if desc:IsA("Tool") or desc:IsA("Folder") or desc:IsA("Configuration") or desc:IsA("Animation") then
+				table.insert(searchStrings, desc.Name:lower())
 			end
 		end
+	end)
+
+	-- 4. Check active playing animations on Animator
+	pcall(function()
+		local hum = ch:FindFirstChildOfClass("Humanoid")
+		local anim = hum and hum:FindFirstChildOfClass("Animator")
+		if anim then
+			for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
+				if track.IsPlaying then
+					table.insert(searchStrings, (track.Name or ""):lower())
+					if track.Animation then
+						table.insert(searchStrings, (track.Animation.Name or ""):lower())
+						table.insert(searchStrings, (track.Animation.AnimationId or ""):lower())
+					end
+				end
+			end
+		end
+	end)
+
+	-- 5. If LocalPlayer: check hotbar UI text
+	if p == lp then
+		pcall(function()
+			local pg = lp:FindFirstChild("PlayerGui")
+			if pg then
+				for _, lbl in ipairs(pg:GetDescendants()) do
+					if lbl:IsA("TextLabel") and lbl.Text ~= "" and lbl.Visible then
+						table.insert(searchStrings, lbl.Text:lower())
+					end
+				end
+			end
+		end)
 	end
 
-	local detectedName = "Unknown"
+	-- 6. Match against character database
+	local bestMatch = nil
+	local highestHits = 0
 	local isAwakened = false
 
-	for movesetName, data in pairs(characterMovesets) do
-		local matches = 0
-		for _, toolName in ipairs(toolNames) do
+	for key, data in pairs(characterMovesets) do
+		local hits = 0
+		for _, str in ipairs(searchStrings) do
 			for _, kw in ipairs(data.Keywords) do
-				if toolName:find(kw) then
-					matches = matches + 1
+				if str:find(kw, 1, true) then
+					hits = hits + 1
 					break
 				end
 			end
 			for _, awk in ipairs(data.AwakenedMoves) do
-				if toolName:find(awk) then
+				if str:find(awk, 1, true) then
 					isAwakened = true
 					break
 				end
 			end
 		end
-		if matches > 0 then
-			detectedName = movesetName
-			break
+		if hits > highestHits then
+			highestHits = hits
+			bestMatch = data
 		end
 	end
 
-	-- check attributes or visual auras for awakening
-	if ch and not isAwakened then
-		if ch:GetAttribute("Awakened") == true or ch:FindFirstChild("AwakeningAura") or ch:FindFirstChild("UltimateActive") then
-			isAwakened = true
-		end
+	-- Check explicit awakening attributes or aura objects
+	if not isAwakened then
+		pcall(function()
+			if ch:GetAttribute("Awakened") == true or ch:FindFirstChild("AwakeningAura") or ch:FindFirstChild("UltimateActive") then
+				isAwakened = true
+			end
+		end)
 	end
 
-	return detectedName, isAwakened
+	if bestMatch and highestHits > 0 then
+		return bestMatch.DisplayName, isAwakened, bestMatch.Color
+	end
+
+	return "Fighter", isAwakened, colors.NormalEnemy
 end
 
 local function getPlayerData(p)
-	if not p then return "Unknown", false end
+	if not p then return "Fighter", false, colors.NormalEnemy end
 	local now = tick()
 	local cached = cachedCharacterData[p]
-	if cached and (now - cached.LastChecked < 3) then
-		return cached.Name, cached.Awakened
+	if cached and (now - cached.LastChecked < 2.5) then
+		return cached.Name, cached.Awakened, cached.Color
 	end
 
-	local name, awakened = detectPlayerMoveset(p)
+	local name, awakened, tagColor = detectPlayerMoveset(p)
 	cachedCharacterData[p] = {
 		Name = name,
 		Awakened = awakened,
+		Color = tagColor,
 		LastChecked = now,
 	}
-	return name, awakened
+	return name, awakened, tagColor
 end
 
 -- check if an enemy is performing an attack animation
@@ -320,101 +464,68 @@ local function getClosestEnemy(maxDist)
 	return closest, closestDist
 end
 
--- stealth: fe invisibility with local ghost view
+-- stealth: avatar ghost transparency (preserves full combat, dashing, hitboxes, and original avatar appearance)
+local storedTransparencies = {}
+
 local function setInvisibility(enable)
 	cfg.invisible = enable
 	local ch = lp.Character
 	if not ch then return end
-	local hrp = ch:FindFirstChild("HumanoidRootPart")
-	local hum = ch:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum then return end
+
+	-- Clean up legacy ghost clone if any exists
+	if invisGhostClone then
+		pcall(function() invisGhostClone:Destroy() end)
+		invisGhostClone = nil
+	end
+
+	-- Restore RootJoint if it was previously modified
+	if storedRootJoint and storedRootJoint.Parent and storedRootJointC0 then
+		pcall(function() storedRootJoint.C0 = storedRootJointC0 end)
+	end
+	storedRootJoint = nil
+	storedRootJointC0 = nil
+	storedRootJointC1 = nil
 
 	if enable then
-		-- locate root joint (R15 LowerTorso.Root, R6 HumanoidRootPart.RootJoint)
-		local rJoint = (ch:FindFirstChild("LowerTorso") and ch.LowerTorso:FindFirstChild("Root"))
-			or (ch:FindFirstChild("LowerTorso") and ch.LowerTorso:FindFirstChild("RootJoint"))
-			or hrp:FindFirstChild("RootJoint")
-
-		if rJoint and rJoint:IsA("Motor6D") then
-			storedRootJoint = rJoint
-			storedRootJointC0 = rJoint.C0
-			storedRootJointC1 = rJoint.C1
-
-			-- destroy previous ghost if any
-			if invisGhostClone then
-				pcall(function() invisGhostClone:Destroy() end)
-				invisGhostClone = nil
-			end
-
-			-- create local ghost visual clone
-			ch.Archivable = true
-			local ghost = ch:Clone()
-			ghost.Name = "Substance_GhostVisual"
-
-			-- sanitize ghost clone
-			for _, obj in ipairs(ghost:GetDescendants()) do
-				if obj:IsA("Script") or obj:IsA("LocalScript") or obj:IsA("Sound") or obj:IsA("BillboardGui") or obj:IsA("Highlight") then
-					obj:Destroy()
-				elseif obj:IsA("BasePart") then
-					obj.CanCollide = false
-					obj.Anchored = false
-					obj.CastShadow = false
-					obj.Transparency = cfg.invisOpacity
-					obj.Material = Enum.Material.ForceField
-					obj.Color = colors.Ghost
-				elseif obj:IsA("Decal") then
-					obj.Transparency = cfg.invisOpacity
+		-- Apply transparency directly to your actual character
+		-- Preserves your real clothes, shirts, pants, skin colors, meshes, and accessories!
+		-- Your character rig stays completely intact so dashing (Q), M1 punches, combos, and damage work 100%!
+		for _, obj in ipairs(ch:GetDescendants()) do
+			if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
+				if storedTransparencies[obj] == nil then
+					storedTransparencies[obj] = obj.Transparency
 				end
+				obj.Transparency = cfg.invisOpacity
+			elseif obj:IsA("Decal") then
+				if storedTransparencies[obj] == nil then
+					storedTransparencies[obj] = obj.Transparency
+				end
+				obj.Transparency = cfg.invisOpacity
 			end
-
-			local gHrp = ghost:FindFirstChild("HumanoidRootPart")
-			if gHrp then
-				gHrp.Transparency = 1
-				local weld = Instance.new("WeldConstraint")
-				weld.Part0 = hrp
-				weld.Part1 = gHrp
-				weld.Parent = gHrp
-			end
-
-			ghost.Parent = workspace.CurrentCamera
-			invisGhostClone = ghost
-
-			-- offset real visual body out of server replication bounds
-			rJoint.C0 = CFrame.new(0, 999999, 0)
-			apiNotify({
-				Title = "Invisibility",
-				Content = "FE Invisibility enabled!\nOthers see you invisible; ghost is visible to you.",
-				Duration = 4,
-			})
-		else
-			apiNotify({
-				Title = "Invisibility",
-				Content = "Unable to locate character RootJoint. Reset character and retry.",
-				Duration = 3.5,
-			})
 		end
+
+		apiNotify({
+			Title = "Ghost Transparency",
+			Content = "Avatar transparency active! Dashing, M1 hits & damage are fully functional.",
+			Duration = 3.5,
+		})
 	else
-		-- restore
-		if storedRootJoint and storedRootJoint.Parent and storedRootJointC0 then
-			pcall(function() storedRootJoint.C0 = storedRootJointC0 end)
+		-- Restore original appearance cleanly
+		for obj, origTrans in pairs(storedTransparencies) do
+			if obj and obj.Parent then
+				pcall(function() obj.Transparency = origTrans end)
+			end
 		end
-		storedRootJoint = nil
-		storedRootJointC0 = nil
-		storedRootJointC1 = nil
+		storedTransparencies = {}
 
-		if invisGhostClone then
-			pcall(function() invisGhostClone:Destroy() end)
-			invisGhostClone = nil
-		end
-
-		apiNotify({ Title = "Invisibility", Content = "Invisibility disabled.", Duration = 2 })
+		apiNotify({ Title = "Ghost Transparency", Content = "Restored default avatar visibility.", Duration = 2 })
 	end
 end
 
 -- update ghost transparency dynamically
 local function updateGhostOpacity()
-	if invisGhostClone then
-		for _, obj in ipairs(invisGhostClone:GetDescendants()) do
+	if cfg.invisible and lp.Character then
+		for _, obj in ipairs(lp.Character:GetDescendants()) do
 			if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
 				obj.Transparency = cfg.invisOpacity
 			elseif obj:IsA("Decal") then
@@ -737,96 +848,101 @@ local function updatePlayerESP(p)
 		return
 	end
 
-	local movesetName, isAwk = getPlayerData(p)
+	local movesetName, isAwk, tagColor = getPlayerData(p)
 	local dist = 0
 	if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
 		dist = math.floor((lp.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
 	end
 
-	-- highlight
+	-- highlight (sleek, non-intrusive alpha so animations and combat remain clearly visible)
 	local hl = highlights[p]
 	if not hl or hl.Parent ~= ch then
 		if hl then pcall(function() hl:Destroy() end) end
 		hl = Instance.new("Highlight")
 		hl.Name = "Substance_TSB_HL"
 		hl.Adornee = ch
-		hl.FillTransparency = 0.6
-		hl.OutlineTransparency = 0.1
+		hl.FillTransparency = 0.78
+		hl.OutlineTransparency = 0.15
 		hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		hl.Parent = ch
 		highlights[p] = hl
 	end
 
+	local activeOutlineColor = tagColor or colors.NormalEnemy
 	if isAwk and cfg.highlightAwakened then
-		hl.FillColor = colors.Awakened
-		hl.OutlineColor = colors.Awakened
+		activeOutlineColor = colors.Awakened
 	elseif currentCamlockTarget == p then
-		hl.FillColor = colors.Targeted
-		hl.OutlineColor = colors.Targeted
-	else
-		hl.FillColor = colors.NormalEnemy
-		hl.OutlineColor = colors.NormalEnemy
+		activeOutlineColor = colors.Targeted
 	end
+	hl.FillColor = activeOutlineColor
+	hl.OutlineColor = activeOutlineColor
 
-	-- billboard tag
+	-- modern sleek combat tag
 	local bb = billboards[p]
 	if not bb or bb.Parent ~= hrp then
 		if bb then pcall(function() bb:Destroy() end) end
 		bb = Instance.new("BillboardGui")
 		bb.Name = "Substance_TSB_Tag"
 		bb.Adornee = hrp
-		bb.Size = UDim2.fromOffset(190, 70)
+		bb.Size = UDim2.fromOffset(135, 34)
 		bb.StudsOffset = Vector3.new(0, 3.2, 0)
 		bb.AlwaysOnTop = true
+		bb.MaxDistance = 250
 
 		local frame = Instance.new("Frame")
 		frame.Name = "TagFrame"
 		frame.Size = UDim2.fromScale(1, 1)
-		frame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-		frame.BackgroundTransparency = 0.35
+		frame.BackgroundColor3 = Color3.fromRGB(14, 10, 22)
+		frame.BackgroundTransparency = 0.3
 		frame.BorderSizePixel = 0
 		frame.Parent = bb
 
 		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
+		corner.CornerRadius = UDim.new(0, 6)
 		corner.Parent = frame
 
 		local stroke = Instance.new("UIStroke")
 		stroke.Name = "TagStroke"
-		stroke.Color = colors.NormalEnemy
-		stroke.Thickness = 1.2
+		stroke.Color = activeOutlineColor
+		stroke.Thickness = 1
+		stroke.Transparency = 0.25
 		stroke.Parent = frame
 
+		-- top line: name & distance
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "NameLabel"
-		nameLabel.Size = UDim2.new(1, 0, 0, 18)
-		nameLabel.Position = UDim2.new(0, 0, 0, 4)
+		nameLabel.Size = UDim2.new(0.68, 0, 0, 13)
+		nameLabel.Position = UDim2.new(0, 6, 0, 3)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Font = Enum.Font.GothamBold
-		nameLabel.TextSize = 12
+		nameLabel.TextSize = 10
 		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 		nameLabel.Parent = frame
 
-		local movesetLabel = Instance.new("TextLabel")
-		movesetLabel.Name = "MovesetLabel"
-		movesetLabel.Size = UDim2.new(1, 0, 0, 15)
-		movesetLabel.Position = UDim2.new(0, 0, 0, 22)
-		movesetLabel.BackgroundTransparency = 1
-		movesetLabel.Font = Enum.Font.GothamMedium
-		movesetLabel.TextSize = 10
-		movesetLabel.TextColor3 = colors.Awakened
-		movesetLabel.Parent = frame
+		local distLabel = Instance.new("TextLabel")
+		distLabel.Name = "DistLabel"
+		distLabel.Size = UDim2.new(0.28, 0, 0, 12)
+		distLabel.Position = UDim2.new(0.68, 0, 0, 3)
+		distLabel.BackgroundTransparency = 1
+		distLabel.Font = Enum.Font.GothamMedium
+		distLabel.TextSize = 8
+		distLabel.TextColor3 = Color3.fromRGB(175, 160, 205)
+		distLabel.TextXAlignment = Enum.TextXAlignment.Right
+		distLabel.Parent = frame
 
+		-- middle line: slim health bar
 		local healthBarBg = Instance.new("Frame")
 		healthBarBg.Name = "HealthBarBg"
-		healthBarBg.Size = UDim2.new(0.88, 0, 0, 6)
-		healthBarBg.Position = UDim2.new(0.06, 0, 0, 40)
-		healthBarBg.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+		healthBarBg.Size = UDim2.new(1, -12, 0, 3)
+		healthBarBg.Position = UDim2.new(0, 6, 0, 17)
+		healthBarBg.BackgroundColor3 = Color3.fromRGB(28, 22, 38)
 		healthBarBg.BorderSizePixel = 0
 		healthBarBg.Parent = frame
 
 		local barCorner = Instance.new("UICorner")
-		barCorner.CornerRadius = UDim.new(0, 3)
+		barCorner.CornerRadius = UDim.new(0, 2)
 		barCorner.Parent = healthBarBg
 
 		local healthFill = Instance.new("Frame")
@@ -837,18 +953,31 @@ local function updatePlayerESP(p)
 		healthFill.Parent = healthBarBg
 
 		local fillCorner = Instance.new("UICorner")
-		fillCorner.CornerRadius = UDim.new(0, 3)
+		fillCorner.CornerRadius = UDim.new(0, 2)
 		fillCorner.Parent = healthFill
 
-		local subLabel = Instance.new("TextLabel")
-		subLabel.Name = "SubLabel"
-		subLabel.Size = UDim2.new(1, 0, 0, 14)
-		subLabel.Position = UDim2.new(0, 0, 0, 50)
-		subLabel.BackgroundTransparency = 1
-		subLabel.Font = Enum.Font.Gotham
-		subLabel.TextSize = 9
-		subLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-		subLabel.Parent = frame
+		-- bottom line: moveset badge & exact HP numbers
+		local movesetLabel = Instance.new("TextLabel")
+		movesetLabel.Name = "MovesetLabel"
+		movesetLabel.Size = UDim2.new(0.58, 0, 0, 12)
+		movesetLabel.Position = UDim2.new(0, 6, 0, 20)
+		movesetLabel.BackgroundTransparency = 1
+		movesetLabel.Font = Enum.Font.GothamBold
+		movesetLabel.TextSize = 8
+		movesetLabel.TextColor3 = tagColor or colors.Awakened
+		movesetLabel.TextXAlignment = Enum.TextXAlignment.Left
+		movesetLabel.Parent = frame
+
+		local hpLabel = Instance.new("TextLabel")
+		hpLabel.Name = "HpLabel"
+		hpLabel.Size = UDim2.new(0.38, 0, 0, 12)
+		hpLabel.Position = UDim2.new(0.58, 0, 0, 20)
+		hpLabel.BackgroundTransparency = 1
+		hpLabel.Font = Enum.Font.Gotham
+		hpLabel.TextSize = 8
+		hpLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+		hpLabel.TextXAlignment = Enum.TextXAlignment.Right
+		hpLabel.Parent = frame
 
 		bb.Parent = hrp
 		billboards[p] = bb
@@ -857,25 +986,26 @@ local function updatePlayerESP(p)
 	-- update tag content
 	local frame = bb:FindFirstChild("TagFrame")
 	if frame then
-		local nameLabel = frame:FindFirstChild("NameLabel")
-		local movesetLabel = frame:FindFirstChild("MovesetLabel")
-		local healthBarBg = frame:FindFirstChild("HealthBarBg")
-		local healthFill = healthBarBg and healthBarBg:FindFirstChild("HealthFill")
-		local subLabel = frame:FindFirstChild("SubLabel")
 		local stroke = frame:FindFirstChild("TagStroke")
-
 		if stroke then
-			stroke.Color = (isAwk and colors.Awakened) or (currentCamlockTarget == p and colors.Targeted) or colors.NormalEnemy
+			stroke.Color = activeOutlineColor
 		end
 
+		local nameLabel = frame:FindFirstChild("NameLabel")
 		if nameLabel then
 			nameLabel.Text = (cfg.showNames and p.DisplayName or "")
 		end
 
+		local distLabel = frame:FindFirstChild("DistLabel")
+		if distLabel then
+			distLabel.Text = (cfg.showDist and (tostring(dist) .. "m") or "")
+		end
+
+		local movesetLabel = frame:FindFirstChild("MovesetLabel")
 		if movesetLabel then
 			if cfg.showMoveset then
-				movesetLabel.Text = (isAwk and "★ AWAKENED ★ " or "") .. movesetName
-				movesetLabel.TextColor3 = isAwk and colors.Awakened or Color3.fromRGB(200, 160, 255)
+				movesetLabel.Text = (isAwk and "★ " or "") .. movesetName
+				movesetLabel.TextColor3 = isAwk and colors.Awakened or (tagColor or colors.NormalEnemy)
 			else
 				movesetLabel.Text = ""
 			end
@@ -885,6 +1015,8 @@ local function updatePlayerESP(p)
 		local maxHp = math.max(1, math.floor(hum.MaxHealth))
 		local pct = math.clamp(hp / maxHp, 0, 1)
 
+		local healthBarBg = frame:FindFirstChild("HealthBarBg")
+		local healthFill = healthBarBg and healthBarBg:FindFirstChild("HealthFill")
 		if healthFill then
 			healthFill.Size = UDim2.new(pct, 0, 1, 0)
 			if pct > 0.5 then
@@ -896,11 +1028,9 @@ local function updatePlayerESP(p)
 			end
 		end
 
-		if subLabel then
-			local parts = {}
-			if cfg.showHealth then table.insert(parts, tostring(hp) .. "/" .. tostring(maxHp) .. " HP") end
-			if cfg.showDist then table.insert(parts, tostring(dist) .. "m") end
-			subLabel.Text = table.concat(parts, "  •  ")
+		local hpLabel = frame:FindFirstChild("HpLabel")
+		if hpLabel then
+			hpLabel.Text = (cfg.showHealth and (tostring(hp) .. " HP") or "")
 		end
 	end
 end
@@ -1019,8 +1149,8 @@ module.Elements = {
 
 	{
 		Type = "Toggle",
-		Name = "Invisibility (FE Ghost)",
-		Description = "Makes you 100% invisible to all other players; you see yourself as a ghost",
+		Name = "Ghost Transparency",
+		Description = "Semi-transparent avatar with 100% working combat, dashing, and damage",
 		Default = false,
 		Callback = function(v)
 			setInvisibility(v)
@@ -1029,10 +1159,10 @@ module.Elements = {
 
 	{
 		Type = "Slider",
-		Name = "Ghost Self Opacity",
-		Description = "Local transparency of your own character while invisible",
-		Min = 0.1,
-		Max = 0.9,
+		Name = "Avatar Opacity",
+		Description = "Adjusts transparency while preserving your real clothes, textures & skin",
+		Min = 0.05,
+		Max = 0.95,
 		Default = 0.5,
 		Rounding = 2,
 		Callback = function(v)
@@ -1428,6 +1558,7 @@ module.Init = function(api)
 	-- character respawn handler
 	local charConn = lp.CharacterAdded:Connect(function(newChar)
 		task.wait(0.5)
+		storedTransparencies = {}
 		if cfg.invisible then
 			setInvisibility(true)
 		end
@@ -1464,6 +1595,9 @@ module.BackgroundTask = function(api)
 
 			-- combat routine
 			processKillAura()
+			if cfg.hitboxExpander then
+				applyHitboxExpander()
+			end
 
 			-- tech routines
 			processAntiRagdoll()
