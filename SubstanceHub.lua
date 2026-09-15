@@ -177,6 +177,11 @@ local gameRegistry = {
 		ModuleUrl = REPO .. "modules/mm2.lua",
 		ModuleFile = "modules/mm2.lua",
 	},
+	[10449761463] = {
+		Name = "The Strongest Battlegrounds",
+		ModuleUrl = REPO .. "modules/tsb.lua",
+		ModuleFile = "modules/tsb.lua",
+	},
 }
 
 local currentGame = gameRegistry[gameId]

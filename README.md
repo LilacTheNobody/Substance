@@ -57,6 +57,15 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/LilacTheNobody/Substa
 - **Combat** — Shoot Murderer (with target velocity prediction), Auto Shoot, Kill All, Auto Kill All, Knife Aura with distance slider
 - **Automation** — Auto Grab Dropped Gun, Auto Coin Farm
 
+#### The Strongest Battlegrounds
+- **Stealth (FE Invisibility)** — Completely invisible to other players while maintaining a semi-transparent local ghost model with customizable opacity
+- **Smart Defense** — Real-time attack animation tracking for Auto Block and intelligent Auto Dodge (Q dash) on unblockable guardbreak attacks
+- **Combat Automation** — Kill Aura / Auto M1 with custom click pacing and Auto Finisher tech (Uppercuts / Downslams on hit 4)
+- **Hitbox Expander** — Scalable enemy hitbox sizing with custom ForceField transparency
+- **Auto Awakening** — Automatically detects full ultimate meter and pops Awakening (`G`)
+- **Visuals & ESP** — Moveset detection (Saitama, Garou, Genos, Sonic, Metal Bat, Atomic, Tatsumaki, Sukuna), health bars, and Debris/Throwable ESP
+- **Movement & Tech** — Boosted Dash (`Q`), Anti-Void rescue, No Attack Slowdown, and instant arena teleports
+
 ---
 
 ### Adding Games
